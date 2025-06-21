@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スプラトゥーン3 ギア構成シミュレーター (最新版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #1a202c;
+            color: #e2e8f0;
+        }
+        .squid-ink-bg {
+            background-color: #2d3748;
+            background-image:
+                radial-gradient(#4a5568 1px, transparent 1px),
+                radial-gradient(#4a5568 1px, #2d3748 1px);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+        }
+        .power-slot {
+            transition: all 0.2s ease-in-out;
+            border: 2px dashed transparent;
+        }
+        .power-slot.drag-over {
+            transform: scale(1.1);
+            background-color: #4a5568;
+            border-color: #60a5fa;
+        }
+        .draggable-power {
+            cursor: grab;
+        }
+        .draggable-power:active {
+            cursor: grabbing;
+        }
+        #trash-can {
+            transition: all 0.2s ease-in-out;
+            font-size: 2.5rem;
+        }
+        #trash-can.drag-over {
+            transform: scale(1.2);
+            color: #ef4444;
+        }
+        .active-tab {
+            background-color: #4299e1;
+            color: white;
+        }
+        .power-icon-base {
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border-radius: 9999px;
+        }
+        .main-power-icon { width: 48px; height: 48px; }
+        .sub-power-icon { width: 24px; height: 24px; }
+        .palette-power-icon { width: 48px; height: 48px; }
+        img {
+            -o-object-fit: cover;
+            object-fit: cover;
+            background: #4a5568;
+        }
+        /* スクロールバーのスタイル */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #2d3748; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        /* 比較モーダル */
+        #compare-modal { display: none; }
+        .highlight-best {
+            background-color: rgba(253, 224, 71, 0.2);
+            font-weight: bold;
+            color: #fde047;
+        }
+        /* 選択時アニメーション */
+        @keyframes flash-selected {
+            0% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+            50% { box-shadow: 0 0 12px 4px rgba(96, 165, 250, 0.7); }
+            100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+        }
+        .flash-animation {
+            animation: flash-selected 0.7s ease-out;
+        }
+        select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+    </style>
+</head>
+<body class="squid-ink-bg">
+
+    <div class="container mx-auto p-4 max-w-7xl">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-300 drop-shadow-lg">ギア構成シミュレーター for スプラトゥーン3</h1>
+            <p class="text-slate-400 mt-2">ブキの詳細フィルター機能を追加！</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- 左側: 構成表示 -->
+            <div class="lg:col-span-1 xl:col-span-1 bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-700 flex flex-col">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-2xl font-bold text-blue-200 border-b-2 border-blue-400 pb-2">現在の構成</h2>
+                    <div id="trash-can" class="p-2 text-slate-500">🗑️</div>
+                </div>
+                
+                <div class="mt-4">
+                    <h3 class="font-bold text-lg mb-2 text-slate-300">ブキ</h3>
+                    <div id="selected-weapon-container" class="bg-gray-700 p-3 rounded-lg">
+                        <div class="flex items-center gap-4">
+                            <img id="selected-weapon-img" class="w-20 h-20 rounded">
+                            <div class="flex-1">
+                                <p id="selected-weapon-name" class="font-bold">ブキを選択</p>
+                                <div class="flex gap-x-3 gap-y-1 mt-1 flex-wrap text-sm text-slate-400">
+                                    <p id="selected-weapon-sub">サブ: -</p>
+                                    <p id="selected-weapon-special">スペシャル: -</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3 space-y-2 text-sm">
+                            <div class="flex items-center gap-2">
+                                <span class="w-16 text-slate-400">射程</span>
+                                <div class="w-full bg-gray-600 rounded-full h-2.5">
+                                    <div id="selected-weapon-range-bar" class="bg-blue-400 h-2.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                             <div class="flex items-center gap-2">
+                                <span class="w-16 text-slate-400">サブ消費</span>
+                                <span id="selected-weapon-sub-cost" class="font-semibold text-slate-200">- %</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-16 text-slate-400">SPP</span>
+                                <span id="selected-weapon-sp" class="font-semibold text-slate-200">- p</span>
+                            </div>
+                        </div>
+                        <p id="selected-weapon-description" class="mt-3 text-xs text-slate-400 border-t border-gray-600 pt-3"></p>
+                    </div>
+                </div>
+
+                <div class="space-y-4 mt-6">
+                    <h3 class="font-bold text-lg mb-2 text-slate-300">ギアパワー</h3>
+                    <!-- アタマ, フク, クツ... -->
+                    <div>
+                        <p class="font-semibold mb-1 text-slate-400">アタマ</p>
+                        <div class="bg-gray-700 p-3 rounded-lg flex items-center gap-3">
+                            <div id="head-main-power" data-gear-type="head" data-power-type="main" class="power-slot power-icon-base main-power-icon bg-gray-900"></div>
+                            <div class="flex gap-2">
+                                <div id="head-sub-power-0" data-gear-type="head" data-power-type="sub" data-index="0" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                                <div id="head-sub-power-1" data-gear-type="head" data-power-type="sub" data-index="1" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                                <div id="head-sub-power-2" data-gear-type="head" data-power-type="sub" data-index="2" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="font-semibold mb-1 text-slate-400">フク</p>
+                        <div class="bg-gray-700 p-3 rounded-lg flex items-center gap-3">
+                            <div id="clothing-main-power" data-gear-type="clothing" data-power-type="main" class="power-slot power-icon-base main-power-icon bg-gray-900"></div>
+                             <div class="flex gap-2">
+                                <div id="clothing-sub-power-0" data-gear-type="clothing" data-power-type="sub" data-index="0" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                                <div id="clothing-sub-power-1" data-gear-type="clothing" data-power-type="sub" data-index="1" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                                <div id="clothing-sub-power-2" data-gear-type="clothing" data-power-type="sub" data-index="2" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="font-semibold mb-1 text-slate-400">クツ</p>
+                         <div class="bg-gray-700 p-3 rounded-lg flex items-center gap-3">
+                            <div id="shoes-main-power" data-gear-type="shoes" data-power-type="main" class="power-slot power-icon-base main-power-icon bg-gray-900"></div>
+                             <div class="flex gap-2">
+                                <div id="shoes-sub-power-0" data-gear-type="shoes" data-power-type="sub" data-index="0" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                                <div id="shoes-sub-power-1" data-gear-type="shoes" data-power-type="sub" data-index="1" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                                <div id="shoes-sub-power-2" data-gear-type="shoes" data-power-type="sub" data-index="2" class="power-slot power-icon-base sub-power-icon bg-gray-900"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-auto pt-6">
+                    <h3 class="font-bold text-lg mb-2 text-slate-300">ギアパワー効果</h3>
+                    <div id="power-summary" class="grid grid-cols-2 gap-x-4 gap-y-2 bg-gray-900/50 p-3 rounded-lg min-h-[80px]"></div>
+                </div>
+            </div>
+            
+            <!-- 中央: マイセット管理 -->
+            <div class="lg:col-span-1 xl:col-span-1 bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-700 flex flex-col">
+                 <div class="flex-none">
+                    <h2 class="text-2xl font-bold text-blue-200 border-b-2 border-blue-400 pb-2 mb-4">マイセット管理</h2>
+                    <div class="flex gap-2 mb-4">
+                        <input type="text" id="my-set-name" class="flex-grow bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="マイセット名">
+                        <button id="save-set-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md">保存</button>
+                    </div>
+                 </div>
+                <div id="my-set-list" class="flex-grow overflow-y-auto space-y-2 pr-2">
+                    <!-- 保存されたマイセットがここに表示される -->
+                </div>
+                 <div class="mt-auto pt-4 border-t border-gray-700 flex-none">
+                    <button id="compare-sets-btn" class="hidden w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-md mb-2">選択したセットを比較</button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="download-sets-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md">DL</button>
+                        <button id="upload-sets-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-md">UL</button>
+                        <input type="file" id="file-uploader" class="hidden" accept=".json">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側: 選択パネル -->
+            <div class="lg:col-span-1 xl:col-span-2 bg-gray-800/80 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-gray-700 flex flex-col">
+                <div class="flex border-b border-gray-600 mb-4">
+                    <button id="tab-weapon" class="tab-btn px-4 py-2 font-bold -mb-px border-b-2 border-transparent active-tab">ブキ</button>
+                    <button id="tab-power" class="tab-btn px-4 py-2 font-bold -mb-px border-b-2 border-transparent">ギアパワー</button>
+                </div>
+                <div id="selection-panel" class="flex-grow flex flex-col min-h-0"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 比較モーダル -->
+    <div id="compare-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div id="compare-modal-content" class="bg-gray-800 rounded-xl border border-gray-600 w-full max-w-6xl max-h-[90vh] flex flex-col">
+            <div class="flex-none flex justify-between items-center p-4 border-b border-gray-700">
+                <h3 class="text-xl font-bold text-blue-300">マイセット比較</h3>
+                <button id="close-compare-modal" class="text-2xl font-bold hover:text-red-500">&times;</button>
+            </div>
+            <div id="compare-table-container" class="flex-grow overflow-auto p-4">
+                <!-- 比較テーブルがここに表示される -->
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- データ定義 ---
+        const GEAR_POWERS = {
+            'ink_saver_main': { name: 'インク効率アップ(メイン)', img: 'https://placehold.co/48x48/86EFAC/1F2937?text=MAIN' },
+            'ink_saver_sub': { name: 'インク効率アップ(サブ)', img: 'https://placehold.co/48x48/86EFAC/1F2937?text=SUB' },
+            'ink_recovery_up': { name: 'インク回復力アップ', img: 'https://placehold.co/48x48/67E8F9/1F2937?text=REC' },
+            'run_speed_up': { name: 'ヒト移動速度アップ', img: 'https://placehold.co/48x48/FBCFE8/1F2937?text=RUN' },
+            'swim_speed_up': { name: 'イカダッシュ速度アップ', img: 'https://placehold.co/48x48/A5B4FC/1F2937?text=SWIM' },
+            'special_charge_up': { name: 'スペシャル増加量アップ', img: 'https://placehold.co/48x48/FDE047/1F2937?text=CHG' },
+            'special_saver': { name: 'スペシャル減少量ダウン', img: 'https://placehold.co/48x48/FDE047/1F2937?text=SAV' },
+            'special_power_up': { name: 'スペシャル性能アップ', img: 'https://placehold.co/48x48/FDE047/1F2937?text=POW' },
+            'quick_respawn': { name: '復活時間短縮', img: 'https://placehold.co/48x48/FECACA/1F2937?text=RESP' },
+            'sub_power_up': { name: 'サブ性能アップ', img: 'https://placehold.co/48x48/FED7AA/1F2937?text=SUBP' },
+            'ink_resistance_up': { name: '相手インク影響軽減', img: 'https://placehold.co/48x48/D1D5DB/1F2937?text=RES' },
+            'sub_resistance_up': { name: 'サブ影響軽減', img: 'https://placehold.co/48x48/D1D5DB/1F2937?text=SRES' },
+            'intensify_action': { name: 'アクション強化', img: 'https://placehold.co/48x48/C4B5FD/1F2937?text=ACT' },
+            'comeback': { name: 'カムバック', img: 'https://placehold.co/48x48/FCA5A5/1F2937?text=CB', mainOnly: true, exclusiveTo: 'head' },
+            'tenacity': { name: '逆境強化', img: 'https://placehold.co/48x48/FCA5A5/1F2937?text=TENACITY', mainOnly: true, exclusiveTo: 'head' },
+            'last_ditch_effort': { name: 'ラストスパート', img: 'https://placehold.co/48x48/FCA5A5/1F2937?text=LDE', mainOnly: true, exclusiveTo: 'head' },
+            'ninja_squid': { name: 'イカニンジャ', img: 'https://placehold.co/48x48/6366F1/E0E7FF?text=NINJA', mainOnly: true, exclusiveTo: 'clothing' },
+            'haunt': { name: 'リベンジ', img: 'https://placehold.co/48x48/F472B6/1F2937?text=HAUNT', mainOnly: true, exclusiveTo: 'clothing' },
+            'respawn_punisher': { name: 'ペナルティアップ', img: 'https://placehold.co/48x48/F472B6/1F2937?text=RP', mainOnly: true, exclusiveTo: 'clothing' },
+            'stealth_jump': { name: 'ステルスジャンプ', img: 'https://placehold.co/48x48/A78BFA/1F2937?text=SJ', mainOnly: true, exclusiveTo: 'shoes' },
+            'object_shredder': { name: '対物攻撃力アップ', img: 'https://placehold.co/48x48/FB923C/1F2937?text=OS', mainOnly: true, exclusiveTo: 'shoes' },
+            'drop_roller': { name: '受け身術', img: 'https://placehold.co/48x48/34D399/1F2937?text=DR', mainOnly: true, exclusiveTo: 'shoes' },
+        };
+        const SUB_WEAPONS = {
+            "スプラッシュボム": { cost: 70 }, "キューバンボム": { cost: 70 }, "クイックボム": { cost: 45 },
+            "カーリングボム": { cost: 65 }, "ロボットボム": { cost: 55 }, "トラップ": { cost: 60 },
+            "スプリンクラー": { cost: 60 }, "スプラッシュシールド": { cost: 60 }, "タンサンボム": { cost: 60 },
+            "トーピード": { cost: 65 }, "ポイントセンサー": { cost: 45 }, "ポイズンミスト": { cost: 60 },
+            "ラインマーカー": { cost: 40 }, "ジャンプビーコン": { cost: 75 }
+        };
+        const WEAPONS = [
+            { name: "わかばシューター", type:"シューター", range: 27, sub: "スプラッシュボム", special: "グレートバリア", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=WAKABA", description: "インク効率が良く、塗り性能も高い初心者向けのブキ。味方をサポートするサブ・スペシャルとの相性も抜群。まずはこのブキで基本をマスターしよう。" },
+            { name: "もみじシューター", type:"シューター", range: 27, sub: "トーピード", special: "ホップソナー", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=MOMIJI", description: "わかばシューターのマイナーチェンジ版。索敵が得意なサブとスペシャルで、味方の進路を確保しながら戦うサポート型のブキ。" },
+            { name: "シャープマーカー", type:"シューター", range: 37, sub: "クイックボム", special: "カニタンク", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SHARP", description: "一切ブレない高い射撃精度が魅力。クイックボムとのコンボや、カニタンクでの強引な打開など、攻撃的な立ち回りが得意。" },
+            { name: "シャープマーカーネオ", type:"シューター", range: 37, sub: "キューバンボム", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SHARP_N", description: "シャープマーカーのマイナーチェンジ版。高い塗り性能を持つスペシャルで、エリア確保やヤグラ・ホコの進行をサポートする。" },
+            { name: "プロモデラーMG", type:"シューター", range: 27, sub: "タンサンボム", special: "サメライド", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PMG", description: "圧倒的な連射力と塗り性能を誇るブキ。タンサンボムで道を作り、サメライドで一気に奇襲をかける動きが強力。" },
+            { name: "プロモデラーRG", type:"シューター", range: 27, sub: "スプリンクラー", special: "ナイスダマ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PMRG", description: "プロモデラーMGのマイナーチェンジ版。スプリンクラーでスペシャルを溜め、ナイスダマでエリアを制圧する戦い方が得意。" },
+            { name: "スプラシューター", type:"シューター", range: 50, sub: "キューバンボム", special: "ウルトラショット", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPLAT_S", description: "射程、連射力、インク効率のバランスが良く、どんな状況でも戦える万能ブキ。キューバンボムとウルトラショットで対物も得意。" },
+            { name: "スプラシューターコラボ", type:"シューター", range: 50, sub: "スプラッシュボム", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPLAT_SC", description: "スプラシューターのコラボモデル。より攻撃的なスプラッシュボムと、塗りもキルも狙えるトリプルトルネードを持つ。" },
+            { name: "ヒーローシューター レプリカ", type:"シューター", range: 50, sub: "キューバンボム", special: "ウルトラショット", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HERO", description: "性能はスプラシューターと同じ。ヒーローモードをクリアした証となる、特別なデザインが施されたモデル。" },
+            { name: ".52ガロン", type:"シューター", range: 55, sub: "スプラッシュシールド", special: "メガホンレーザー5.1ch", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=.52GAL", description: "2発で相手を倒せる高い攻撃力が特徴。スプラッシュシールドで安全を確保し、メガホンレーザーで遠くの敵を狙う。" },
+            { name: "N-ZAP85", type:"シューター", range: 50, sub: "キューバンボム", special: "エナジースタンド", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=NZAP85", description: "軽量級で動きが速く、塗りも得意なブキ。エナジースタンドで味方全体を強化し、有利な状況を作り出す。" },
+            { name: "N-ZAP89", type:"シューター", range: 50, sub: "ロボットボム", special: "デコイチラシ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=NZAP89", description: "N-ZAP85のマイナーチェンジ版。ロボットボムで索敵し、デコイチラシで相手の注意を引きつけて戦う。" },
+            { name: "ボールドマーカー", type:"シューター", range: 17, sub: "カーリングボム", special: "ウルトラハンコ", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BOLD", description: "射程は短いが、トップクラスの攻撃力と機動力を誇る。カーリングボムで一気に接近し、近距離戦で相手を圧倒する。" },
+            { name: "ボールドマーカーネオ", type:"シューター", range: 17, sub: "ジャンプビーコン", special: "メガホンレーザー5.1ch", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BOLD_N", description: "ボールドマーカーのマイナーチェンジ版。ジャンプビーコンで素早く前線に復帰し、戦線を維持する。" },
+            { name: ".96ガロン", type:"シューター", range: 72, sub: "スプリンクラー", special: "キューインキ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=.96GAL", description: "射程が長く、2発で倒せる攻撃力が魅力。キューインキで相手の攻撃を防ぎ、有利な撃ち合いに持ち込む。" },
+            { name: "ジェットスイーパー", type:"シューター", range: 82, sub: "ラインマーカー", special: "キューインキ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=JET", description: "シューターの中で最も長い射程を持つ。後方から味方を援護し、キューインキで相手のスペシャルを防ぐのが得意。" },
+            { name: "ジェットスイーパーカスタム", type:"シューター", range: 82, sub: "ポイズンミスト", special: "アメフラシ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=JET_C", description: "ジェットスイーパーのカスタムモデル。ポイズンミストで相手の動きを鈍らせ、アメフラシでエリアを確保する。" },
+            { name: "プライムシューター", type:"シューター", range: 68, sub: "ラインマーカー", special: "カニタンク", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PRIME", description: "高い射撃精度と長い射程が特徴。中距離での撃ち合いに強く、カニタンクで遠くの敵も攻撃できる。" },
+            { name: "プライムシューターコラボ", type:"シューター", range: 68, sub: "キューバンボム", special: "ナイスダマ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PRIME_C", description: "プライムシューターのコラボモデル。キューバンボムで牽制し、ナイスダマで一気にエリアを制圧する。" },
+            { name: "スペースシューター", type:"シューター", range: 65, sub: "ポイントセンサー", special: "メガホンレーザー5.1ch", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPACE", description: "塗り性能が高く、弾が大きいため当てやすい。ポイントセンサーで索敵し、メガホンレーザーで追撃する。" },
+            { name: "スペースシューターコラボ", type:"シューター", range: 65, sub: "トラップ", special: "ジェットパック", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPACE_C", description: "スペースシューターのコラボモデル。トラップで相手の足止めをし、ジェットパックで空中から攻撃する。" },
+            { name: "L3リールガン", type:"シューター", range: 60, sub: "カーリングボム", special: "カニタンク", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=L3", description: "1トリガーで3発の弾を発射する特殊なシューター。独特のリズムで、中距離から正確な射撃が可能。" },
+            { name: "L3リールガンD", type:"シューター", range: 60, sub: "クイックボム", special: "ウルトラハンコ", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=L3D", description: "L3リールガンのマイナーチェンジ版。クイックボムとのコンボや、ウルトラハンコでの奇襲が得意。" },
+            { name: "H3リールガン", type:"シューター", range: 75, sub: "ポイントセンサー", special: "エナジースタンド", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=H3", description: "L3リールガンより射程が長く、1トリガー1発の威力も高い。使いこなすには練習が必要だが、強力なブキ。" },
+            { name: "H3リールガンD", type:"シューター", range: 75, sub: "スプラッシュシールド", special: "トリプルトルネード", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=H3D", description: "H3リールガンのマイナーチェンジ版。シールドで身を守りながら、トリプルトルネードで広範囲を攻撃できる。" },
+            { name: "ボトルガイザー", type:"シューター", range: 70, sub: "スプラッシュシールド", special: "ウルトラショット", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BOTTLE", description: "初弾の精度が非常に高い特殊なシューター。遠距離はタップ撃ち、近距離は連射で対応するテクニカルなブキ。" },
+            { name: "ボトルガイザーフォイル", type:"シューター", range: 70, sub: "ロボットボム", special: "アメフラシ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BOTTLE_F", description: "ボトルガイザーのフォイルモデル。ロボットボムで索敵し、アメフラシでエリアをコントロールする。" },
+            { name: "カーボンローラー", type:"ローラー", range: 17, sub: "ロボットボム", special: "ショクワンダー", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CARBON", description: "軽量で振りかぶる速度が速いローラー。機動力を活かして相手に接近し、一撃で倒すのが得意。" },
+            { name: "カーボンローラーデコ", type:"ローラー", range: 17, sub: "クイックボム", special: "ウルトラショット", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CARBON_D", description: "カーボンローラーのデコモデル。クイックボムとのコンボが強力で、より攻撃的な立ち回りができる。" },
+            { name: "スプラローラー", type:"ローラー", range: 45, sub: "カーリングボム", special: "グレートバリア", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=ROLLER", description: "塗りもキルもこなせるバランスの取れたローラー。カーリングボムで道を作り、潜伏からの奇襲が強力。" },
+            { name: "スプラローラーコラボ", type:"ローラー", range: 45, sub: "ジャンプビーコン", special: "テイオウイカ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=ROLLER_C", description: "スプラローラーのコラボモデル。ジャンプビーコンで味方の復帰を助け、テイオウイカで前線を押し上げる。" },
+            { name: "ダイナモローラー", type:"ローラー", range: 68, sub: "スプリンクラー", special: "エナジースタンド", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DYNAMO", description: "重量級で振りが遅いが、一撃の威力と塗り範囲が非常に広い。高所からインクをばらまくだけで脅威となる。" },
+            { name: "ヴァリアブルローラー", type:"ローラー", range: 62, sub: "トラップ", special: "マルチミサイル", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=VAR", description: "縦振りと横振りで性能が変わるテクニカルなローラー。状況に応じて使い分け、マルチミサイルで追い打ちをかける。" },
+            { name: "ヴァリアブルローラーフォイル", type:"ローラー", range: 62, sub: "キューバンボム", special: "スミナガシート", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=VAR_F", description: "ヴァリアブルローラーのフォイルモデル。キューバンボムで牽制し、スミナガシートで視界を遮りながら戦う。" },
+            { name: "ワイドローラー", type:"ローラー", range: 42, sub: "スプラッシュシールド", special: "キューインキ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=WIDE", description: "横幅が広く、一度に広範囲を塗れる。シールドで身を守りながら、安全に塗りを広げることができる。" },
+            { name: "ワイドローラーコラボ", type:"ローラー", range: 42, sub: "ラインマーカー", special: "アメフラシ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=WIDE_C", description: "ワイドローラーのコラボモデル。ラインマーカーで索敵し、アメフラシでエリアをコントロールする。" },
+            { name: "スクイックリンα", type:"チャージャー", range: 77, sub: "ポイントセンサー", special: "グレートバリア", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SQUIK_A", description: "チャージが速く、機動力も高い軽量チャージャー。ポイントセンサーで索敵し、グレートバリアで味方を守る。" },
+            { name: "スクイックリンβ", type:"チャージャー", range: 77, sub: "ロボットボム", special: "ショクワンダー", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SQUIK_B", description: "スクイックリンαのマイナーチェンジ版。ロボットボムで索敵し、ショクワンダーで高台に登るなど奇襲が得意。" },
+            { name: "スプラチャージャー", type:"チャージャー", range: 91, sub: "スプラッシュボム", special: "キューインキ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CHARGER", description: "標準的な性能を持つチャージャー。射程が長く、高台から相手を狙撃するのが得意。キューインキで自衛も可能。" },
+            { name: "スプラチャージャーコラボ", type:"チャージャー", range: 91, sub: "スプラッシュシールド", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CHARGER_C", description: "スプラチャージャーのコラボモデル。シールドで安全を確保し、トルネードで広範囲を攻撃できる。" },
+            { name: "スプラスコープ", type:"チャージャー", range: 93, sub: "スプラッシュボム", special: "キューインキ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SCOPE", description: "スコープ付きで、より遠くの敵を正確に狙えるチャージャー。基本的な性能はスプラチャージャーと同じ。" },
+            { name: "スプラスコープコラボ", type:"チャージャー", range: 93, sub: "スプラッシュシールド", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SCOPE_C", description: "スプラスコープのコラボモデル。シールドで身を守り、トルネードで広範囲を攻撃する。" },
+            { name: "14式竹筒銃・甲", type:"チャージャー", range: 81, sub: "ロボットボム", special: "メガホンレーザー5.1ch", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BAMBOO", description: "チャージが非常に速いが、一撃で倒せない特殊なチャージャー。連射力を活かして、中距離で戦う。" },
+            { name: "14式竹筒銃・乙", type:"チャージャー", range: 81, sub: "タンサンボム", special: "ウルトラショット", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BAMBOO_2", description: "14式竹筒銃・甲のマイナーチェンジ版。タンサンボムで牽制し、ウルトラショットで遠くの敵を狙う。" },
+            { name: "リッター4K", type:"チャージャー", range: 100, sub: "ホップソナー", special: "テイオウイカ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=LITER", description: "全ブキ中、最長の射程を誇る。チャージは遅いが、その射程は圧倒的な脅威となる。後方支援の要。" },
+            { name: "4Kスコープ", type:"チャージャー", range: 100, sub: "ホップソナー", special: "テイオウイカ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=4K_SCOPE", description: "リッター4Kのスコープ付きモデル。さらに精密な射撃が可能になるが、視野が狭まるため注意が必要。" },
+            { name: "ソイチューバー", type:"チャージャー", range: 85, sub: "トーピード", special: "マルチミサイル", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SOY", description: "チャージキープ時間が非常に長いチャージャー。トーピードで索敵し、マルチミサイルで追い打ちをかける。" },
+            { name: "R-PEN/5H", type:"チャージャー", range: 75, sub: "スプリンクラー", special: "エナジースタンド", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=R-PEN", description: "5発までチャージして連射できる特殊なチャージャー。中距離での制圧力が高く、エナジースタンドで味方を支援する。" },
+            { name: "パブロ", type:"フデ", range: 15, sub: "スプラッシュボム", special: "メガホンレーザー5.1ch", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PABLO", description: "塗り進む速度が非常に速く、機動力に優れる。相手をかく乱しながら、素早く戦場を駆け回る。" },
+            { name: "パブロ・ヒュー", type:"フデ", range: 15, sub: "トラップ", special: "ウルトラハンコ", specialPoints: 170, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PABLO_H", description: "パブロのマイナーチェンジ版。トラップを設置し、ウルトラハンコで一気に攻め込む戦い方が得意。" },
+            { name: "ホクサイ", type:"フデ", range: 25, sub: "キューバンボム", special: "ショクワンダー", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HOKUSAI", description: "パブロより射程と威力があるフデ。近距離での戦闘能力が高く、ショクワンダーで高台への奇襲も可能。" },
+            { name: "ホクサイ・ヒュー", type:"フデ", range: 25, sub: "ジャンプビーコン", special: "アメフラシ", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HOKUSAI_H", description: "ホクサイのマイナーチェンジ版。ビーコンで味方の復帰を助け、アメフラシでエリアをコントロールする。" },
+            { name: "フィンセント", type:"フデ", range: 35, sub: "カーリングボム", special: "ホップソナー", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=VINCENT", description: "振りが遅いが、一撃の威力が高い重量級のフデ。カーリングボムで接近し、ホップソナーで索敵する。" },
+            { name: "ヒッセン", type:"スロッシャー", range: 42, sub: "ポイズンミスト", special: "ジェットパック", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HISSEN", description: "3方向にインクを飛ばすため、当てやすいスロッシャー。高低差のある地形でも攻撃しやすいのが特徴。" },
+            { name: "ヒッセン・ヒュー", type:"スロッシャー", range: 42, sub: "タンサンボム", special: "エナジースタンド", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HISSEN_H", description: "ヒッセンのヒューモデル。タンサンボムで遠くの敵を牽制し、エナジースタンドで味方を強化する。" },
+            { name: "バケットスロッシャー", type:"スロッシャー", range: 58, sub: "スプラッシュボム", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BUCKET", description: "標準的な性能を持つスロッシャー。障害物越しの攻撃が得意で、どんな状況でも安定した戦いができる。" },
+            { name: "バケットスロッシャーデコ", type:"スロッシャー", range: 58, sub: "ラインマーカー", special: "ショクワンダー", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BUCKET_D", description: "バケットスロッシャーのデコモデル。ラインマーカーで索敵し、ショクワンダーで奇襲をかける。" },
+            { name: "オーバーフロッシャー", type:"スロッシャー", range: 78, sub: "スプリンクラー", special: "アメフラシ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=OVER", description: "泡状のインクが壁で跳ね返る特殊なスロッシャー。狭い場所での制圧力が非常に高い。" },
+            { name: "オーバーフロッシャーデコ", type:"スロッシャー", range: 78, sub: "ラインマーカー", special: "テイオウイカ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=OVER_D", description: "オーバーフロッシャーのデコモデル。ラインマーカーで索敵し、テイオウイカで強引に攻め込む。" },
+            { name: "エクスプロッシャー", type:"スロッシャー", range: 88, sub: "ポイントセンサー", special: "アメフラシ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=EXPLO", description: "着弾点で爆発するインクを放つ重量級スロッシャー。遠距離からの攻撃が得意で、後方支援に向いている。" },
+            { name: "エクスプロッシャーカスタム", type:"スロッシャー", range: 88, sub: "スプラッシュシールド", special: "ウルトラショット", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=EXPLO_C", description: "エクスプロッシャーのカスタムモデル。シールドで身を守り、ウルトラショットで遠くの敵を狙撃する。" },
+            { name: "スクリュースロッシャー", type:"スロッシャー", range: 65, sub: "タンサンボム", special: "ナイスダマ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SCREW", description: "渦を巻くインクを発射し、直撃させれば一撃で倒せる。曲射が得意で、障害物越しの攻撃が強力。" },
+            { name: "スクリュースロッシャーネオ", type:"スロッシャー", range: 65, sub: "ポイントセンサー", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SCREW_N", description: "スクリュースロッシャーのネオモデル。ポイントセンサーで索敵し、トルネードで広範囲を攻撃する。" },
+            { name: "スプラスピナー", type:"スピナー", range: 68, sub: "クイックボム", special: "ウルトラハンコ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPLATLING", description: "チャージ時間と射撃時間のバランスが良い標準的なスピナー。機動力もそこそこあり、中衛での撃ち合いや塗り広げなど、幅広い状況に対応できるのが強み。" },
+            { name: "スプラスピナーコラボ", type:"スピナー", range: 68, sub: "ポイズンミスト", special: "グレートバリア", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPLATLING_C", description: "スプラスピナーのコラボモデル。ポイズンミストで相手の動きを妨害し、グレートバリアで安全地帯を作りながら戦える、より守備的な構成。" },
+            { name: "バレルスピナー", type:"スピナー", range: 80, sub: "スプリンクラー", special: "ホップソナー", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BARREL", description: "長い射程と高い連射力を持つスピナーの代表格。一度チャージすれば、広範囲を制圧できる。ホップソナーで潜伏する敵をあぶり出すことも可能。" },
+            { name: "バレルスピナーデコ", type:"スピナー", range: 80, sub: "ポイントセンサー", special: "テイオウイカ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BARREL_D", description: "バレルスピナーのデコモデル。ポイントセンサーで敵の位置を把握し、テイオウイカで強引に前線を押し上げるなど、攻撃的な立ち回りができる。" },
+            { name: "ハイドラント", type:"スピナー", range: 90, sub: "ロボットボム", special: "ナイスダマ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HYDRA", description: "全スピナー中最長の射程と最高の連射力を誇る重量級ブキ。チャージは長いが、その制圧力は圧倒的。後方からの支援が強力。" },
+            { name: "ハイドラントカスタム", type:"スピナー", range: 90, sub: "トラップ", special: "スミナガシート", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HYDRA_C", description: "ハイドラントのカスタムモデル。トラップで足元を守り、スミナガシートで視界を遮ることで、より安全に長射程を活かせる構成。" },
+            { name: "ノーチラス47", type:"スピナー", range: 75, sub: "ポイントセンサー", special: "アメフラシ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=NAUTI", description: "チャージキープが可能な特殊なスピナー。イカ状態でチャージを保持し、奇襲を仕掛けられる。ポイントセンサーとアメフラシでサポートも得意。" },
+            { name: "ノーチラス79", type:"スピナー", range: 75, sub: "キューバンボム", special: "ウルトラショット", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=NAUTI79", description: "ノーチラス47のマイナーチェンジ版。キューバンボムで牽制し、ウルトラショットで遠距離の敵を狙撃できる、より攻撃的な構成。" },
+            { name: "クーゲルシュライバー", type:"スピナー", range: 85, sub: "タンサンボム", special: "ジェットパック", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=KUGEL", description: "短射程モードと長射程モードを使い分けるテクニカルなスピナー。タンサンボムで道を作り、ジェットパックで空中から攻め込む。" },
+            { name: "クーゲルシュライバー・ヒュー", type:"スピナー", range: 85, sub: "ジャンプビーコン", special: "キューインキ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=KUGEL_H", description: "クーゲルシュライバーのヒューモデル。ジャンプビーコンで戦線復帰を早め、キューインキで敵のスペシャルから身を守る。" },
+            { name: "イグザミナー", type:"スピナー", range: 65, sub: "カーリングボム", special: "エナジースタンド", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=EXAMINER", description: "5回までスライドできる特殊なスピナー。スライド撃ちでかく乱しつつ、カーリングボムで移動し、エナジースタンドで味方を支援する。" },
+            { name: "スパッタリー", type:"マニューバー", range: 20, sub: "ジャンプビーコン", special: "エナジースタンド", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPUTTERY", description: "スライド後の連射速度が非常に速いマニューバー。ジャンプビーコンで有利な位置を確保し、エナジースタンドで一気に攻め込む。" },
+            { name: "スパッタリー・ヒュー", type:"マニューバー", range: 20, sub: "トーピード", special: "サメライド", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPUTTERY_H", description: "スパッタリーのヒューモデル。トーピードで索敵と牽制を行い、サメライドで敵陣に突撃する、奇襲が得意な構成。" },
+            { name: "スプラマニューバー", type:"マニューバー", range: 52, sub: "キューバンボム", special: "カニタンク", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DUALIE", description: "2回連続のスライドが可能で、機動力と対面性能のバランスが良い。キューバンボムとカニタンクで、どんな状況にも対応できる万能さが魅力。" },
+            { name: "スプラマニューバーコラボ", type:"マニューバー", range: 52, sub: "カーリングボム", special: "ウルトラハンコ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DUALIE_C", description: "スプラマニューバーのコラボモデル。カーリングボムで素早く移動し、ウルトラハンコで相手の陣形を崩すのが得意。" },
+            { name: "デュアルスイーパー", type:"マニューバー", range: 65, sub: "スプラッシュボム", special: "ホップソナー", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DUALIE_S", description: "スライド後の射程が長く、後方からのけん制が得意なマニューバー。スプラッシュボムとホップソナーで索敵と攻撃を両立する。" },
+            { name: "デュアルスイーパーカスタム", type:"マニューバー", range: 65, sub: "ジャンプビーコン", special: "デコイチラシ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DUALIE_S_C", description: "デュアルスイーパーのカスタムモデル。ジャンプビーコンで味方を呼び、デコイチラシで相手をかく乱するサポート型の構成。" },
+            { name: "ケルビン525", type:"マニューバー", range: 70, sub: "スプラッシュシールド", special: "ナイスダマ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=KELVIN", description: "スライド後の弾が2発で相手を倒せる高火力マニューバー。スプラッシュシールドで身を守り、ナイスダマで広範囲を攻撃する。" },
+            { name: "ケルビン525デコ", type:"マニューバー", range: 70, sub: "ポイントセンサー", special: "ウルトラショット", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=KELVIN_D", description: "ケルビン525のデコモデル。ポイントセンサーで敵の位置を割り出し、ウルトラショットで遠距離から仕留めることができる。" },
+            { name: "クアッドホッパーブラック", type:"マニューバー", range: 40, sub: "ロボットボム", special: "サメライド", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=QUAD", description: "4回連続のスライドが可能で、機動力が非常に高い。ロボットボムで索敵し、サメライドで一気に距離を詰める。" },
+            { name: "クアッドホッパーホワイト", type:"マニューバー", range: 40, sub: "スプリンクラー", special: "ショクワンダー", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=QUAD_W", description: "クアッドホッパーのホワイトモデル。スプリンクラーで塗りを確保しつつ、ショクワンダーで高台への奇襲や裏取りを狙う。" },
+            { name: "パラシェルター", type:"シェルター", range: 40, sub: "スプリンクラー", special: "トリプルトルネード", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SHELTER", description: "傘を開いて相手の攻撃を防げるシェルター。スプリンクラーで塗りを広げ、トリプルトルネードでエリアを確保する。" },
+            { name: "パラシェルターソレーラ", type:"シェルター", range: 40, sub: "ロボットボム", special: "ジェットパック", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SHELTER_S", description: "パラシェルターのソレーラモデル。ロボットボムで索敵し、ジェットパックで空中から攻撃する、より攻撃的な構成。" },
+            { name: "スパイガジェット", type:"シェルター", range: 25, sub: "トラップ", special: "サメライド", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPY", description: "傘を開いたまま射撃できる特殊なシェルター。トラップで相手の足止めをし、サメライドで奇襲をかける。" },
+            { name: "スパイガジェットソレーラ", type:"シェルター", range: 25, sub: "トーピード", special: "スミナガシート", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPY_S", description: "スパイガジェットのソレーラモデル。トーピードで索敵し、スミナガシートで視界を遮りながら戦う。" },
+            { name: "キャンプシェルター", type:"シェルター", range: 55, sub: "ジャンプビーコン", special: "キューインキ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CAMP", description: "大きな傘で味方を守ることができる重量級シェルター。ジャンプビーコンで前線を維持し、キューインキで敵の攻撃を防ぐ。" },
+            { name: "キャンプシェルターソレーラ", type:"シェルター", range: 55, sub: "トラップ", special: "ウルトラショット", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CAMP_S", description: "キャンプシェルターのソレーラモデル。トラップで身を守りつつ、ウルトラショットで遠くの敵を狙撃できる。" },
+            { name: "トライストリンガー", type:"ストリンガー", range: 80, sub: "ポイズンミスト", special: "メガホンレーザー5.1ch", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=STRINGER", description: "3方向に矢を放つ弓のようなブキ。チャージ時間で性能が変化し、ポイズンミストとメガホンレーザーで相手を妨害する。" },
+            { name: "トライストリンガーコラボ", type:"ストリンガー", range: 80, sub: "スプリンクラー", special: "テイオウイカ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=STRINGER_C", description: "トライストリンガーのコラボモデル。スプリンクラーで塗りを確保し、テイオウイカで強引に前線を押し上げる。" },
+            { name: "LACT-450", type:"ストリンガー", range: 60, sub: "カーリングボム", special: "マルチミサイル", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=LACT", description: "塗り性能が非常に高く、チャージせずに連射できるストリンガー。カーリングボムで移動し、マルチミサイルで広範囲を攻撃する。" },
+            { name: "LACT-450デコ", type:"ストリンガー", range: 60, sub: "ジャンプビーコン", special: "サメライド", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=LACT_D", description: "LACT-450のデコモデル。ジャンプビーコンで味方を呼び寄せ、サメライドで奇襲をかけるサポート型の構成。" },
+            { name: "ドライブワイパー", type:"ワイパー", range: 48, sub: "トーピード", special: "ウルトラハンコ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=WIPER", description: "振りが速く、機動力に優れたワイパー。溜め斬りで遠くの敵を攻撃し、トーピードとウルトラハンコで積極的に攻める。" },
+            { name: "ドライブワイパーデコ", type:"ワイパー", range: 48, sub: "ジャンプビーコン", special: "マルチミサイル", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=WIPER_D", description: "ドライブワイパーのデコモデル。ジャンプビーコンで前線を維持し、マルチミサイルで広範囲を攻撃するサポート型。" },
+            { name: "ジムワイパー", type:"ワイパー", range: 60, sub: "クイックボム", special: "カニタンク", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=JIM", description: "ドライブワイパーより威力と射程に優れるワイパー。クイックボムとのコンボが強力で、カニタンクで遠距離も対応可能。" },
+            { name: "ジムワイパー・ヒュー", type:"ワイパー", range: 60, sub: "ポイズンミスト", special: "キューインキ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=JIM_H", description: "ジムワイパーのヒューモデル。ポイズンミストで相手の動きを鈍らせ、キューインキでスペシャルから身を守る。" },
+            { name: "ホットブラスター", type:"ブラスター", range: 40, sub: "ロボットボム", special: "グレートバリア", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HOT", description: "爆風で相手を攻撃するブラスター。直撃させれば一撃で倒せる威力を持つ。ロボットボムで索敵し、グレートバリアで味方を守る。" },
+            { name: "ホットブラスターカスタム", type:"ブラスター", range: 40, sub: "ジャンプビーコン", special: "ウルトラショット", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HOT_C", description: "ホットブラスターのカスタムモデル。ジャンプビーコンで戦線に素早く復帰し、ウルトラショットで遠くの敵を狙撃する。" },
+            { name: "ロングブラスター", type:"ブラスター", range: 62, sub: "キューバンボム", special: "アメフラシ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=LONG", description: "ホットブラスターより射程が長く、遠距離への爆風攻撃が強力。キューバンボムで牽制し、アメフラシでエリアを確保する。" },
+            { name: "ロングブラスターカスタム", type:"ブラスター", range: 62, sub: "スプラッシュシールド", special: "ジェットパック", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=LONG_C", description: "ロングブラスターのカスタム版。スプラッシュシールドで身を守りつつ、ジェットパックで空中から奇襲をかけることができる。" },
+            { name: "ラピッドブラスター", type:"ブラスター", range: 70, sub: "トラップ", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=RAPID", description: "連射速度が速いブラスター。直撃威力は低いが、爆風と合わせて連続でダメージを与えられる。トラップで守りも固い。" },
+            { name: "ラピッドブラスターデコ", type:"ブラスター", range: 70, sub: "トーピード", special: "ジェットパック", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=RAPID_D", description: "ラピッドブラスターのデコモデル。トーピードで索敵と牽制を行い、ジェットパックで空中から攻め立てる構成。" },
+            { name: "Rブラスターエリート", type:"ブラスター", range: 80, sub: "ポイズンミスト", special: "キューインキ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=R-BLAST", description: "ラピッドブラスターよりさらに射程が長い。ポイズンミストで相手の動きを鈍らせ、長射程を活かして有利に立ち回る。" },
+            { name: "Rブラスターエリートデコ", type:"ブラスター", range: 80, sub: "ラインマーカー", special: "サメライド", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=R-BLAST_D", description: "Rブラスターエリートのデコモデル。ラインマーカーで敵をマーキングし、サメライドで一気に突撃する奇襲型の構成。" },
+            { name: "ノヴァブラスター", type:"ブラスター", range: 20, sub: "スプラッシュボム", special: "ショクワンダー", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=NOVA", description: "爆発範囲が広く、近距離での制圧力が非常に高い。射程は短いが、ショクワンダーで機動力を補い、敵陣を荒らす。" },
+            { name: "ノヴァブラスターネオ", type:"ブラスター", range: 20, sub: "タンサンボム", special: "ウルトラハンコ", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=NOVA_N", description: "ノヴァブラスターのネオモデル。タンサンボムで遠くの敵を牽制しつつ、ウルトラハンコで強引に道を切り開く。" },
+            { name: "クラッシュブラスター", type:"ブラスター", range: 30, sub: "スプラッシュボム", special: "ウルトラショット", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CLASH", description: "連射力が高く、壁や障害物の裏にいる相手を攻撃するのが得意。スプラッシュボムと合わせて、エリアを制圧する力が高い。" },
+            { name: "クラッシュブラスターネオ", type:"ブラスター", range: 30, sub: "カーリングボム", special: "テイオウイカ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=CLASH_N", description: "クラッシュブラスターのネオモデル。カーリングボムで素早く移動し、テイオウイカで無敵になって敵陣に突っ込むことができる。" },
+            { name: "S-BLAST92", type:"ブラスター", range: 50, sub: "スプリンクラー", special: "サメライド", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=S-BLAST92", description: "ジャンプ撃ちで爆風範囲が変わる特殊なブラスター。地上では長射程、空中では短射程モードを使い分け、サメライドで奇襲をかける。" },
+            { name: "S-BLAST91", type:"ブラスター", range: 50, sub: "スプラッシュボム", special: "ウルトラショット", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=S-BLAST91", description: "S-BLAST92のマイナーチェンジ版。スプラッシュボムで牽制し、ウルトラショットで遠くの敵を狙撃できる、より攻撃的な構成。" },
+            { name: "デンタルワイパーミント", type:"ワイパー", range: 55, sub: "ポイズンミスト", special: "グレートバリア", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DENTAL_M", description: "ドライブワイパーとジムワイパーの中間の性能を持つワイパー。ポイズンミストで相手を妨害し、グレートバリアで安全に戦う。" },
+            { name: "デンタルワイパースミ", type:"ワイパー", range: 55, sub: "キューバンボム", special: "ショクワンダー", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DENTAL_S", description: "デンタルワイパーの別モデル。キューバンボムで牽制し、ショクワンダーで高台への奇襲や裏取りを狙うことができる。" },
+            { name: "フルイドV", type:"ストリンガー", range: 70, sub: "ポイントセンサー", special: "ウルトラハンコ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=FLUID_V", description: "5本の矢を同時に放つストリンガー。チャージ具合で矢の軌道が変化する。ポイントセンサーで索敵し、ウルトラハンコで強襲する。" },
+            { name: "フルイドVカスタム", type:"ストリンガー", range: 70, sub: "スプラッシュシールド", special: "ホップソナー", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=FLUID_VC", description: "フルイドVのカスタムモデル。スプラッシュシールドで安全な射撃位置を確保し、ホップソナーで潜伏する敵をあぶり出す。" },
+            { name: "ガエンFF", type:"マニューバー", range: 45, sub: "トラップ", special: "メガホンレーザー5.1ch", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=GAEN_FF", description: "射撃中にスライドすることで、強力な一撃を放つことができるマニューバー。トラップで足場を固め、メガホンレーザーで追撃する。" },
+            { name: "モップリン", type: "スロッシャー", range: 60, sub: "キューバンボム", special: "サメライド", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=MOPPLIN", description: "インクがまとまって飛ぶため、中距離での戦闘が得意なスロッシャー。キューバンボムで牽制し、サメライドで一気に攻め込む。" },
+            { name: "モップリンD", type: "スロッシャー", range: 60, sub: "スプラッシュシールド", special: "ホップソナー", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=MOPPLIN_D", description: "モップリンの別モデル。スプラッシュシールドで安全な位置を確保し、ホップソナーで敵の位置を把握しながら戦う。" },
+            { name: "24式張替傘・甲", type: "シェルター", range: 45, sub: "ラインマーカー", special: "グレートバリア", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=24_KASA", description: "軽量で扱いやすいシェルター。ラインマーカーで索敵し、グレートバリアで味方を守りながら前線を押し上げる。" },
+            { name: "リッター4Kカスタム", type: "チャージャー", range: 100, sub: "ジャンプビーコン", special: "アメフラシ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=LITER_C", description: "リッター4Kのカスタムモデル。ジャンプビーコンで有利なポジションに素早く移動し、アメフラシでエリアをコントロールする。" },
+            { name: "4Kスコープカスタム", type: "チャージャー", range: 100, sub: "ジャンプビーコン", special: "アメフラシ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=4KSCOPE_C", description: "リッター4Kカスタムのスコープ付きモデル。より精密な長距離射撃が可能だが、視野が狭まるため位置取りが重要になる。" },
+            { name: "プロモデラーPG", type: "シューター", range: 27, sub: "スプラッシュボム", special: "ウルトラショット", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PMG_P", description: "プロモデラーMGの別モデル。高い塗り性能とスプラッシュボムを活かし、ウルトラショットで遠くの敵を狙撃する攻撃的な構成。" },
+            { name: "スプラシューターベッチュー", type: "シューター", range: 50, sub: "キューバンボム", special: "エナジースタンド", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPLAT_B", description: "スプラシューターのベッチューモデル。キューバンボムで圧力をかけつつ、エナジースタンドで味方全体を強化するサポートもこなす。" },
+            { name: "N-ZAP83", type: "シューター", range: 50, sub: "スプリンクラー", special: "アメフラシ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=NZAP83", description: "N-ZAP系の別モデル。スプリンクラーで継続的に塗りを確保し、アメフラシで広範囲を制圧する、塗り特化の構成。" },
+            { name: "プライムシューターベッチュー", type: "シューター", range: 68, sub: "スプラッシュボム", special: "ナイスダマ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PRIME_B", description: "プライムシューターのベッチューモデル。スプラッシュボムで対面を補助し、ナイスダマで打開を狙う、より攻撃的な立ち回りが可能。" },
+            { name: "ジェットスイーパーフォイル", type: "シューター", range: 82, sub: "トーピード", special: "ウルトラショット", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=JET_F", description: "ジェットスイーパーのフォイルモデル。トーピードで索敵と牽制を行い、ウルトラショットで超長射程からの狙撃を狙う。" },
+            { name: "L3リールガンベッチュー", type: "シューター", range: 60, sub: "スプラッシュシールド", special: "カニタンク", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=L3_B", description: "L3リールガンのベッチューモデル。シールドで安全な射撃位置を作り、カニタンクで強力な一撃を叩き込む構成。" },
+            { name: "H3リールガンベッチュー", type: "シューター", range: 75, sub: "タンサンボム", special: "エナジースタンド", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=H3_B", description: "H3リールガンのベッチューモデル。タンサンボムで相手を動かし、エナジースタンドで味方を強化してラインを押し上げる。" },
+            { name: ".52ガロンベッチュー", type: "シューター", range: 55, sub: "スプラッシュシールド", special: "メガホンレーザー5.1ch", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=.52GAL_B", description: ".52ガロンのベッチューモデル。シールドで対面性能をさらに高め、メガホンレーザーで障害物越しの敵も攻撃できる。" },
+            { name: ".96ガロンベッチュー", type: "シューター", range: 72, sub: "スプリンクラー", special: "キューインキ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=.96GAL_B", description: ".96ガロンのベッチューモデル。スプリンクラーでスペシャルを溜めやすく、キューインキで敵の攻撃を無効化し、前線を維持する。" },
+            { name: "ヴァリアブルローラーベッチュー", type: "ローラー", range: 62, sub: "ジャンプビーコン", special: "ウルトラハンコ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=VAR_B", description: "ヴァリアブルローラーのベッチューモデル。ビーコンで味方の戦線復帰を助け、ウルトラハンコで奇襲を仕掛ける戦略的な立ち回りができる。" },
+            { name: "14式竹筒銃・丙", type: "チャージャー", range: 81, sub: "ロボットボム", special: "グレートバリア", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=BAMBOO_3", description: "14式竹筒銃の三番目のモデル。ロボットボムで索敵し、グレートバリアで安全地帯を作りながら戦う、サポート寄りの構成。" },
+            { name: "ソイチューバーカスタム", type: "チャージャー", range: 85, sub: "タンサンボム", special: "ウルトラハンコ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SOY_C", description: "ソイチューバーのカスタムモデル。タンサンボムで道を作り、ウルトラハンコで奇襲をかける。" },
+            { name: "スクリュースロッシャーベッチュー", type: "スロッシャー", range: 65, sub: "トーピード", special: "トリプルトルネード", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SCREW_B", description: "スクリュースロッシャーのベッチューモデル。トーピードで索敵し、トリプルトルネードで広範囲を制圧する。中〜遠距離での妨害が得意。" },
+            { name: "スパッタリークリア", type: "マニューバー", range: 20, sub: "スプラッシュボム", special: "トリプルトルネード", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPUT_C", description: "スパッタリーのクリアモデル。スプラッシュボムで近距離の対応力を高め、トリプルトルネードで遠くの敵も攻撃できる。" },
+            { name: "スパイガジェットベッチュー", type: "シェルター", range: 25, sub: "トーピード", special: "スミナガシート", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPY_B", description: "スパイガジェットのベッチューモデル。トーピードで敵の位置を割り出し、スミナガシートで視界を遮って有利な状況を作り出す。" },
+            { name: "プロモデラー彩(サイ)", type: "シューター", range: 27, sub: "クイックボム", special: "スミナガシート", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=PM_SAI", description: "プロモデラー系の新モデル。高い塗り性能はそのままに、クイックボムで近距離の戦闘力を補い、スミナгаシートで戦況をかく乱する。" },
+            { name: "スプラシューター煌(コウ)", type: "シューター", range: 50, sub: "クイックボム", special: "テイオウイカ", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPLAT_KOU", description: "スプラシューター系の新モデル。クイックボムで近〜中距離の対面性能を上げ、テイオウイカで強引に前線を押し上げることが可能。" },
+            { name: ".96ガロン爪(ソウ)", type: "シューター", range: 72, sub: "ラインマーカー", special: "エナジースタンド", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=.96GAL_SOU", description: ".96ガロン系の新モデル。ラインマーカーで敵の位置を共有し、エナジースタンドで味方と共に攻め上がる、サポート寄りの構成。" },
+            { name: "L3リールガン箔(ハク)", type: "シューター", range: 60, sub: "スプラッシュボム", special: "ジェットパック", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=L3_HAKU", description: "L3リールガン系の新モデル。スプラッシュボムで堅実な立ち回りをしつつ、ジェットパックで空中から奇襲をかけることができる。" },
+            { name: "ホットブラスター艶(エン)", type: "ブラスター", range: 40, sub: "ジャンプビーコン", special: "カニタンク", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HOT_EN", description: "ホットブラスター系の新モデル。ジャンプビーコンで strategic な位置取りを可能にし、カニタンクで強力な一撃を放つ。" },
+            { name: "ダイナモローラー冥(メイ)", type: "ローラー", range: 68, sub: "ポイントセンサー", special: "メガホンレーザー5.1ch", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DYNAMO_MEI", description: "ダイナモローラー系の新モデル。ポイントセンサーで潜伏する敵を見つけ出し、メガホンレーザーで障害物越しに攻撃する。" },
+            { name: "ワイドローラー惑(ワク)", type: "ローラー", range: 42, sub: "トーピード", special: "ウルトラチャクチ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=WIDE_WAKU", description: "ワイドローラー系の新モデル。トーピードで索敵と牽制を行い、ウルトラチャクチで囲まれた際の切り返しや奇襲を狙う。" },
+            { name: "ホクサイ彗(スイ)", type: "フデ", range: 25, sub: "ロボットボム", special: "テイオウイカ", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HOKUSAI_SUI", description: "ホクサイ系の新モデル。ロボットボムで索敵し、テイオウイカで無敵になって敵陣を荒らす、攻撃的な構成。" },
+            { name: "モップリン角(カク)", type: "スロッシャー", range: 60, sub: "カーリングボム", special: "カニタンク", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=MOP_KAKU", description: "モップリン系の新モデル。カーリングボムで素早く移動し、カニタンクで遠距離の敵も攻撃できる、汎用性の高い構成。" },
+            { name: "ハイドラント圧(アツ)", type: "スピナー", range: 90, sub: "スプリンクラー", special: "グレートバリア", specialPoints: 210, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=HYDRA_ATSU", description: "ハイドラント系の新モデル。スプリンクラーで塗りを確保しつつ、グレートバリアで安全な射撃ポイントを作り出す。" },
+            { name: "スプラマニューバー耀(ヨウ)", type: "マニューバー", range: 52, sub: "タンサンボム", special: "グレートバリア", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DUALIE_YOU", description: "スプラマニューバー系の新モデル。タンサンボムで相手を動かし、グレートバリアで安全に対面戦闘を行える。" },
+            { name: "デュアルスイーパー蹄(テイ)", type: "マニューバー", range: 65, sub: "ポイントセンサー", special: "スミナガシート", specialPoints: 190, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=DUALIE_S_TEI", description: "デュアルスイーパー系の新モデル。ポイントセンサーで索敵し、スミナガシートで視界を遮りながら戦う、いやらしい構成。" },
+            { name: "スパイガジェット繚(リョウ)", type: "シェルター", range: 25, sub: "カーリングボム", special: "メガホンレーザー5.1ch", specialPoints: 180, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=SPY_RYOU", description: "スパイガジェット系の新モデル。カーリングボムで一気に接近し、メガホンレーザーでとどめを刺す、奇襲が得意な構成。" },
+            { name: "トライストリンガー燈(トウ)", type: "ストリンガー", range: 80, sub: "ラインマーカー", special: "ジェットパック", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=STRING_TOU", description: "トライストリンガー系の新モデル。ラインマーカーで敵の位置を把握し、ジェットパックで空中から狙い撃つ。" },
+            { name: "ジムワイパー封(フウ)", type: "ワイパー", range: 60, sub: "ロボットボム", special: "ナイスダマ", specialPoints: 200, img: "https://placehold.co/128x128/9CA3AF/1F2937?text=JIM_FUU", description: "ジムワイパー系の新モデル。ロボットボムで索敵し、ナイスダマで広範囲を制圧する、堅実な立ち回りが可能。" }
+        ];
+
+        // --- アプリケーションの状態管理 ---
+        let state = {
+            selectedWeapon: WEAPONS[0],
+            powers: {
+                head: { main: null, subs: [null, null, null] },
+                clothing: { main: null, subs: [null, null, null] },
+                shoes: { main: null, subs: [null, null, null] },
+            },
+            currentTab: 'weapon',
+            weaponFilterType: 'すべて',
+            weaponFilterSub: 'すべて',
+            weaponFilterSpecial: 'すべて',
+            mySets: [],
+            comparisonSetIds: new Set(),
+        };
+
+        // --- IndexedDB ---
+        const DB_NAME = 'SplatoonGearSimDB';
+        const STORE_NAME = 'mySets';
+        let db;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onerror = event => reject("IndexedDBの初期化に失敗しました。");
+                request.onsuccess = event => {
+                    db = event.target.result;
+                    resolve(db);
+                };
+                request.onupgradeneeded = event => {
+                    const db = event.target.result;
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                };
+            });
+        }
+
+        // --- DOM要素 ---
+        const selectionPanel = document.getElementById('selection-panel');
+        const mySetListEl = document.getElementById('my-set-list');
+        const mySetNameInput = document.getElementById('my-set-name');
+        const compareBtn = document.getElementById('compare-sets-btn');
+        const compareModal = document.getElementById('compare-modal');
+        const selectedWeaponContainer = document.getElementById('selected-weapon-container');
+
+        // --- 描画関数 ---
+        function renderMySet() {
+            const weapon = state.selectedWeapon;
+            document.getElementById('selected-weapon-img').src = weapon.img;
+            document.getElementById('selected-weapon-name').textContent = weapon.name;
+            document.getElementById('selected-weapon-sub').textContent = `サブ: ${weapon.sub}`;
+            document.getElementById('selected-weapon-special').textContent = `スペシャル: ${weapon.special}`;
+            
+            document.getElementById('selected-weapon-range-bar').style.width = `${weapon.range}%`;
+            document.getElementById('selected-weapon-sub-cost').textContent = `${SUB_WEAPONS[weapon.sub]?.cost || '- '}%`;
+            document.getElementById('selected-weapon-sp').textContent = `${weapon.specialPoints}p`;
+            document.getElementById('selected-weapon-description').textContent = weapon.description || '';
+
+
+            ['head', 'clothing', 'shoes'].forEach(gearType => {
+                const mainPowerId = state.powers[gearType].main;
+                const mainEl = document.getElementById(`${gearType}-main-power`);
+                mainEl.style.backgroundImage = mainPowerId ? `url('${GEAR_POWERS[mainPowerId].img}')` : '';
+                mainEl.title = mainPowerId ? GEAR_POWERS[mainPowerId].name : 'メインギア';
+                mainEl.draggable = !!mainPowerId;
+
+                state.powers[gearType].subs.forEach((subPowerId, i) => {
+                    const subEl = document.getElementById(`${gearType}-sub-power-${i}`);
+                    subEl.style.backgroundImage = subPowerId ? `url('${GEAR_POWERS[subPowerId].img}')` : '';
+                    subEl.title = subPowerId ? GEAR_POWERS[subPowerId].name : `サブギア ${i + 1}`;
+                    subEl.draggable = !!subPowerId;
+                });
+            });
+            renderPowerSummary();
+        }
+
+        function renderPowerSummary() {
+            const counts = calculatePowerCounts(state.powers);
+            const powerSummary = document.getElementById('power-summary');
+            powerSummary.innerHTML = '';
+            
+            const sortedPowers = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+            
+            if (sortedPowers.length === 0) {
+                 powerSummary.innerHTML = '<p class="text-slate-400 col-span-full text-center">ギアパワーをセットしてください</p>';
+                 return;
+            }
+
+            sortedPowers.forEach(powerId => {
+                const powerData = GEAR_POWERS[powerId];
+                const value = (counts[powerId] / 10).toFixed(1);
+                const summaryItem = document.createElement('div');
+                summaryItem.className = 'col-span-1 flex items-center gap-2';
+                summaryItem.innerHTML = `
+                    <div class="power-icon-base" style="width:24px; height:24px; background-image: url('${powerData.img}')" title="${powerData.name}"></div>
+                    <div class="flex-1">
+                        <p class="font-bold text-sm text-blue-300 leading-tight">${value}</p>
+                        <p class="text-xs text-slate-400 leading-tight">${powerData.name}</p>
+                    </div>
+                `;
+                powerSummary.appendChild(summaryItem);
+            });
+        }
+        
+        async function renderMySetList() {
+            const tx = db.transaction(STORE_NAME, 'readonly');
+            const store = tx.objectStore(STORE_NAME);
+            const allSets = await new Promise(resolve => store.getAll().onsuccess = e => resolve(e.target.result));
+            state.mySets = allSets;
+
+            mySetListEl.innerHTML = '';
+            if (state.mySets.length === 0) {
+                mySetListEl.innerHTML = '<p class="text-slate-500 text-center">保存されたマイセットはありません</p>';
+            }
+            state.mySets.forEach(set => {
+                const isChecked = state.comparisonSetIds.has(set.id);
+                const setEl = document.createElement('div');
+                setEl.className = 'bg-gray-700 p-2 rounded-md flex items-center justify-between gap-2';
+                setEl.innerHTML = `
+                    <input type="checkbox" class="compare-checkbox form-checkbox h-5 w-5 bg-gray-900 border-gray-600 text-teal-500 focus:ring-teal-500" data-id="${set.id}" ${isChecked ? 'checked' : ''}>
+                    <p class="flex-1 font-semibold truncate">${set.name}</p>
+                    <div class="flex gap-1">
+                        <button class="load-btn bg-green-700 hover:bg-green-800 text-xs px-2 py-1 rounded" data-id="${set.id}">読込</button>
+                        <button class="delete-btn bg-red-700 hover:bg-red-800 text-xs px-2 py-1 rounded" data-id="${set.id}">削除</button>
+                    </div>
+                `;
+                mySetListEl.appendChild(setEl);
+            });
+            
+            updateCompareButtonVisibility();
+
+            mySetListEl.querySelectorAll('.compare-checkbox').forEach(cb => {
+                cb.onchange = () => toggleCompareSet(parseInt(cb.dataset.id));
+            });
+            mySetListEl.querySelectorAll('.load-btn').forEach(btn => {
+                btn.onclick = () => loadSet(parseInt(btn.dataset.id));
+            });
+            mySetListEl.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.onclick = () => deleteSet(parseInt(btn.dataset.id));
+            });
+        }
+        
+        function renderWeaponGrid() {
+            const weaponTypes = ['すべて', ...new Set(WEAPONS.map(w => w.type))];
+            const subTypes = ['すべて', ...new Set(WEAPONS.map(w => w.sub))];
+            const specialTypes = ['すべて', ...new Set(WEAPONS.map(w => w.special))];
+
+            selectionPanel.innerHTML = `
+                <div class="flex-none grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+                    <select id="weapon-type-filter" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        ${weaponTypes.map(type => `<option value="${type}" ${state.weaponFilterType === type ? 'selected' : ''}>${type}</option>`).join('')}
+                    </select>
+                    <select id="weapon-sub-filter" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        ${subTypes.map(sub => `<option value="${sub}" ${state.weaponFilterSub === sub ? 'selected' : ''}>${sub}</option>`).join('')}
+                    </select>
+                    <select id="weapon-special-filter" class="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        ${specialTypes.map(sp => `<option value="${sp}" ${state.weaponFilterSpecial === sp ? 'selected' : ''}>${sp}</option>`).join('')}
+                    </select>
+                </div>
+                <div id="weapon-grid-container" class="flex-grow overflow-y-auto pr-2"></div>
+            `;
+
+            const container = document.getElementById('weapon-grid-container');
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-3';
+            
+            let filteredWeapons = WEAPONS;
+            if (state.weaponFilterType !== 'すべて') {
+                filteredWeapons = filteredWeapons.filter(w => w.type === state.weaponFilterType);
+            }
+            if (state.weaponFilterSub !== 'すべて') {
+                filteredWeapons = filteredWeapons.filter(w => w.sub === state.weaponFilterSub);
+            }
+            if (state.weaponFilterSpecial !== 'すべて') {
+                filteredWeapons = filteredWeapons.filter(w => w.special === state.weaponFilterSpecial);
+            }
+
+            filteredWeapons.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'bg-gray-700 p-2 rounded-lg text-center cursor-pointer transition hover:bg-blue-900/50';
+                card.innerHTML = `<img src="${item.img}" alt="${item.name}" class="w-full h-auto rounded mx-auto mb-2 aspect-square"><p class="text-xs font-semibold">${item.name}</p>`;
+                card.onclick = () => {
+                    state.selectedWeapon = item;
+                    renderMySet();
+                    selectedWeaponContainer.classList.add('flash-animation');
+                };
+                grid.appendChild(card);
+            });
+            container.appendChild(grid);
+            
+            document.getElementById('weapon-type-filter').onchange = (e) => { state.weaponFilterType = e.target.value; renderWeaponGrid(); };
+            document.getElementById('weapon-sub-filter').onchange = (e) => { state.weaponFilterSub = e.target.value; renderWeaponGrid(); };
+            document.getElementById('weapon-special-filter').onchange = (e) => { state.weaponFilterSpecial = e.target.value; renderWeaponGrid(); };
+        }
+
+        function renderPowerGrid() {
+            selectionPanel.innerHTML = '';
+            const grid = document.createElement('div');
+            grid.className = 'grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-5 xl:grid-cols-6 gap-4';
+            Object.entries(GEAR_POWERS).forEach(([id, power]) => {
+                const card = document.createElement('div');
+                card.className = 'flex flex-col items-center p-1 rounded-md draggable-power';
+                card.draggable = true;
+                card.id = `power-palette-${id}`;
+                card.innerHTML = `<div class="power-icon-base palette-power-icon" style="background-image: url('${power.img}')"></div><p class="text-xs text-center mt-1">${power.name}</p>`;
+                card.addEventListener('dragstart', e => {
+                    e.dataTransfer.setData('application/json', JSON.stringify({ source: 'palette', powerId: id }));
+                });
+                grid.appendChild(card);
+            });
+            selectionPanel.appendChild(grid);
+        }
+
+        function renderCompareModal() {
+            const selectedSets = state.mySets.filter(set => state.comparisonSetIds.has(set.id));
+            const container = document.getElementById('compare-table-container');
+            if (selectedSets.length < 2) {
+                container.innerHTML = '<p class="text-center text-slate-400">比較するには2つ以上のマイセットを選択してください。</p>';
+                return;
+            }
+
+            const allPowerStats = new Set();
+            selectedSets.forEach(set => {
+                const counts = calculatePowerCounts(set.powers);
+                Object.keys(counts).forEach(pid => allPowerStats.add(pid));
+            });
+
+            const statsToCompare = ['ブキ', 'サブウェポン', 'スペシャル', '射程', 'SPP', ...Array.from(allPowerStats).sort()];
+
+            let tableHTML = '<table class="w-full text-sm text-left text-gray-300"><thead><tr class="bg-gray-900">';
+            tableHTML += '<th class="p-2 sticky left-0 bg-gray-900 z-10">能力</th>';
+            selectedSets.forEach(set => {
+                tableHTML += `<th class="p-2 truncate">${set.name}</th>`;
+            });
+            tableHTML += '</tr></thead><tbody>';
+            
+            statsToCompare.forEach(statKey => {
+                let values = [];
+                let rowHTML = `<tr class="border-b border-gray-700">`;
+                
+                if (statKey === 'ブキ' || statKey === 'サブウェポン' || statKey === 'スペシャル') {
+                    rowHTML += `<td class="p-2 font-semibold sticky left-0 bg-gray-800 z-10">${statKey}</td>`;
+                    let prop;
+                    if(statKey === 'ブキ') prop = 'name';
+                    if(statKey === 'サブウェポン') prop = 'sub';
+                    if(statKey === 'スペシャル') prop = 'special';
+                    values = selectedSets.map(set => set.weapon[prop]);
+
+                    values.forEach(value => {
+                        rowHTML += `<td class="p-2 text-xs">${value}</td>`;
+                    });
+                } else if (statKey === '射程' || statKey === 'SPP') {
+                    rowHTML += `<td class="p-2 font-semibold sticky left-0 bg-gray-800 z-10">${statKey}</td>`;
+                    values = selectedSets.map(set => statKey === '射程' ? set.weapon.range : set.weapon.specialPoints);
+                    const isLowerBetter = statKey === 'SPP';
+                    const bestValue = isLowerBetter ? Math.min(...values) : Math.max(...values);
+                    values.forEach(value => {
+                        const isBest = value === bestValue && bestValue > 0;
+                        rowHTML += `<td class="p-2 ${isBest ? 'highlight-best' : ''}">${statKey === 'SPP' ? `${value}p` : value}</td>`;
+                    });
+                } else {
+                    rowHTML += `<td class="p-2 font-semibold sticky left-0 bg-gray-800 z-10 flex items-center gap-2"><div class="power-icon-base" style="width:20px; height:20px; background-image: url('${GEAR_POWERS[statKey].img}')"></div> ${GEAR_POWERS[statKey].name}</td>`;
+                    values = selectedSets.map(set => (calculatePowerCounts(set.powers)[statKey] || 0) / 10);
+                    const maxValue = Math.max(...values);
+                    values.forEach(value => {
+                        const isBest = value === maxValue && maxValue > 0;
+                        rowHTML += `<td class="p-2 ${isBest ? 'highlight-best' : ''}">${value.toFixed(1)}</td>`;
+                    });
+                }
+                rowHTML += `</tr>`;
+                tableHTML += rowHTML;
+            });
+
+            tableHTML += '</tbody></table>';
+            container.innerHTML = tableHTML;
+            compareModal.style.display = 'flex';
+        }
+
+        // --- イベントハンドラ & ロジック ---
+        function toggleCompareSet(id) {
+            if (state.comparisonSetIds.has(id)) {
+                state.comparisonSetIds.delete(id);
+            } else {
+                state.comparisonSetIds.add(id);
+            }
+            updateCompareButtonVisibility();
+        }
+
+        function updateCompareButtonVisibility() {
+            if (state.comparisonSetIds.size >= 2) {
+                compareBtn.classList.remove('hidden');
+            } else {
+                compareBtn.classList.add('hidden');
+            }
+        }
+
+        function handleTabClick(tabId) {
+            state.currentTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active-tab'));
+            document.getElementById(`tab-${tabId}`).classList.add('active-tab');
+            if (tabId === 'weapon') {
+                renderWeaponGrid();
+            } else {
+                selectionPanel.innerHTML = '';
+                renderPowerGrid();
+            }
+        }
+
+        async function saveSet() {
+            const name = mySetNameInput.value.trim();
+            if (!name) { alert('マイセット名を入力してください。'); return; }
+            const newSet = {
+                name: name,
+                weapon: state.selectedWeapon,
+                powers: JSON.parse(JSON.stringify(state.powers))
+            };
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.add(newSet);
+            await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = reject; });
+            mySetNameInput.value = '';
+            await renderMySetList();
+        }
+
+        function loadSet(id) {
+            const setToLoad = state.mySets.find(s => s.id === id);
+            if (setToLoad) {
+                state.selectedWeapon = setToLoad.weapon;
+                state.powers = JSON.parse(JSON.stringify(setToLoad.powers));
+                mySetNameInput.value = setToLoad.name;
+                renderMySet();
+            }
+        }
+
+        async function deleteSet(id) {
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+            store.delete(id);
+            await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = reject; });
+            state.comparisonSetIds.delete(id);
+            await renderMySetList();
+        }
+        
+        function calculatePowerCounts(powers) {
+            const counts = {};
+            if (powers.head.main) counts[powers.head.main] = (counts[powers.head.main] || 0) + 10;
+            if (powers.clothing.main) counts[powers.clothing.main] = (counts[powers.clothing.main] || 0) + 10;
+            if (powers.shoes.main) counts[powers.shoes.main] = (counts[powers.shoes.main] || 0) + 10;
+            [...powers.head.subs, ...powers.clothing.subs, ...powers.shoes.subs].forEach(sub => {
+                if (sub) counts[sub] = (counts[sub] || 0) + 3;
+            });
+            return counts;
+        }
+
+        function downloadSets() {
+            const dataStr = JSON.stringify(state.mySets, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'splatoon3-gear-sets.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function uploadSets() {
+            const fileInput = document.getElementById('file-uploader');
+            fileInput.onchange = e => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = async event => {
+                    try {
+                        const setsToUpload = JSON.parse(event.target.result);
+                        if (!Array.isArray(setsToUpload)) throw new Error('Invalid file format');
+                        const tx = db.transaction(STORE_NAME, 'readwrite');
+                        const store = tx.objectStore(STORE_NAME);
+                        for (const set of setsToUpload) {
+                            delete set.id; 
+                            store.add(set);
+                        }
+                        await new Promise(resolve => tx.oncomplete = resolve);
+                        await renderMySetList();
+                        alert(`${setsToUpload.length}件のマイセットをインポートしました。`);
+                    } catch (err) {
+                        alert('ファイルの読み込みに失敗しました。'); console.error(err);
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            };
+            fileInput.click();
+        }
+
+        function setupDragAndDrop() {
+            const slots = document.querySelectorAll('.power-slot');
+            slots.forEach(slot => {
+                slot.addEventListener('dragover', e => { e.preventDefault(); slot.classList.add('drag-over'); });
+                slot.addEventListener('dragleave', () => slot.classList.remove('drag-over'));
+                slot.addEventListener('drop', e => {
+                    e.preventDefault();
+                    slot.classList.remove('drag-over');
+                    const data = JSON.parse(e.dataTransfer.getData('application/json'));
+                    const targetPowerType = slot.dataset.powerType;
+                    const targetGearType = slot.dataset.gearType;
+                    const powerInfo = GEAR_POWERS[data.powerId];
+                    
+                    if (targetPowerType === 'sub' && powerInfo.mainOnly) return;
+                    if (targetPowerType === 'main' && powerInfo.exclusiveTo && powerInfo.exclusiveTo !== targetGearType) {
+                        const gearTypeName = { head: 'アタマ', clothing: 'フク', shoes: 'クツ' }[powerInfo.exclusiveTo];
+                        alert(`「${powerInfo.name}」は${gearTypeName}専用のメインギアパワーです。`);
+                        return;
+                    }
+                    
+                    if(data.source !== 'palette'){
+                        if(data.sourcePowerType === 'main'){
+                            state.powers[data.sourceGearType].main = null;
+                        } else {
+                            state.powers[data.sourceGearType].subs[data.sourceIndex] = null;
+                        }
+                    }
+
+                    if (targetPowerType === 'main') {
+                        state.powers[targetGearType].main = data.powerId;
+                    } else {
+                        const targetIndex = slot.dataset.index;
+                        state.powers[targetGearType].subs[targetIndex] = data.powerId;
+                    }
+                    renderMySet();
+                });
+                slot.addEventListener('dragstart', e => {
+                   const gearType = e.target.dataset.gearType;
+                   const powerType = e.target.dataset.powerType;
+                   const index = e.target.dataset.index;
+                   const powerId = powerType === 'main' ? state.powers[gearType].main : state.powers[gearType].subs[index];
+                   if(!powerId) { e.preventDefault(); return; }
+                   e.dataTransfer.setData('application/json', JSON.stringify({ 
+                       source: 'slot', powerId: powerId, sourceGearType: gearType,
+                       sourcePowerType: powerType, sourceIndex: index
+                    }));
+                });
+            });
+
+            const trashCan = document.getElementById('trash-can');
+            trashCan.addEventListener('dragover', e => { e.preventDefault(); trashCan.classList.add('drag-over'); });
+            trashCan.addEventListener('dragleave', () => trashCan.classList.remove('drag-over'));
+            trashCan.addEventListener('drop', e => {
+                e.preventDefault();
+                trashCan.classList.remove('drag-over');
+                const data = JSON.parse(e.dataTransfer.getData('application/json'));
+                if (data.source === 'slot') {
+                    if (data.sourcePowerType === 'main') state.powers[data.sourceGearType].main = null;
+                    else state.powers[data.sourceGearType].subs[data.sourceIndex] = null;
+                    renderMySet();
+                }
+            });
+        }
+
+        // --- 初期化 ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('tab-weapon').onclick = () => handleTabClick('weapon');
+            document.getElementById('tab-power').onclick = () => handleTabClick('power');
+            document.getElementById('save-set-btn').onclick = saveSet;
+            document.getElementById('download-sets-btn').onclick = downloadSets;
+            document.getElementById('upload-sets-btn').onclick = uploadSets;
+            compareBtn.onclick = renderCompareModal;
+            document.getElementById('close-compare-modal').onclick = () => compareModal.style.display = 'none';
+            selectedWeaponContainer.addEventListener('animationend', () => {
+                selectedWeaponContainer.classList.remove('flash-animation');
+            });
+
+            try {
+                await initDB();
+                await renderMySetList();
+                renderMySet();
+                handleTabClick('weapon');
+                setupDragAndDrop();
+            } catch (error) {
+                console.error(error);
+                alert("データベースの読み込みに失敗しました。プライベートブラウジングモードでは利用できない場合があります。");
+            }
+        });
+    </script>
+</body>
+</html>

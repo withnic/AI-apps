@@ -363,8 +363,14 @@
                 <option value="yagara">ヤガラ市場</option>
                 <option value="gonzui">ゴンズイ地区</option>
                 <option value="yunohana">ユノハナ大渓谷</option>
+                <option value="masaba">マサバ海峡大橋</option>
+                <option value="kinmedai">キンメダイ美術館</option>
+                <option value="ama">海女美術大学</option>
+                <option value="zatou">ザトウマーケット</option>
+                <option value="chouzame">チョウザメ造船</option>
             </select>
             <select id="rule-select">
+                <option value="nawabari">ナワバリバトル</option>
                 <option value="area">ガチエリア</option>
                 <option value="yagura">ガチヤグラ</option>
                 <option value="hoko">ガチホコバトル</option>
@@ -403,6 +409,8 @@
         <details class="data-settings">
             <summary>データ設定 (JSONファイルで上書き)</summary>
             <div class="data-upload-grid">
+                <label for="load-stages-data">ステージリスト上書き</label>
+                <input type="file" id="load-stages-data" accept=".json">
                 <label for="load-weapons-data">ブキデータ上書き</label>
                 <input type="file" id="load-weapons-data" accept=".json">
                 <label for="load-tiers-data">ティア表上書き</label>
@@ -464,6 +472,13 @@ const TIER_SCORES = {
 };
 
 let WEAPON_TIERS_BY_RULE = {
+    nawabari: {
+        "tierX": ["シャープマーカーネオ"],
+        "tierS": ["わかばシューター", "プロモデラーRG"],
+        "tierA": ["LACT-450", "スプラシューター"],
+        "tierB": ["スプラローラー", "ワイドローラー"],
+        "tierC": ["リッター4K"]
+    },
     area: {
         "tierX": ["リッター4K"],
         "tierS": ["シャープマーカーネオ", "H3リールガンD"],
@@ -507,12 +522,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-button');
     const loadInput = document.getElementById('load-input');
     const analysisHistoryContainer = document.getElementById('analysis-history-container');
+    const stageSelect = document.getElementById('stage-select');
     
     // データアップロード用Input
     const loadWeaponsDataInput = document.getElementById('load-weapons-data');
     const loadTiersDataInput = document.getElementById('load-tiers-data');
     const loadCountersDataInput = document.getElementById('load-counters-data');
     const loadSpecialsDataInput = document.getElementById('load-specials-data');
+    const loadStagesDataInput = document.getElementById('load-stages-data');
     
     // アプリの状態を管理する変数
     let currentSlot = null;
@@ -777,8 +794,8 @@ document.addEventListener('DOMContentLoaded', () => {
             card.dataset.index = index;
 
             const { stage, rule, myTeamAnalysis, enemyTeamAnalysis, matchupScores, myAdvPercentage, enemyAdvPercentage, myTeamWeapons, enemyTeamWeapons } = result;
-            const stageText = document.querySelector(`#stage-select option[value="${stage}"]`).textContent;
-            const ruleText = document.querySelector(`#rule-select option[value="${rule}"]`).textContent;
+            const stageText = document.querySelector(`#stage-select option[value="${stage}"]`)?.textContent || stage;
+            const ruleText = document.querySelector(`#rule-select option[value="${rule}"]`)?.textContent || rule;
 
             let summary = "";
             if (myAdvPercentage > 55) summary = "総合的に自チームが有利です。編成バランスやカウンター相性で優位に立っています。";
@@ -947,6 +964,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    setupDataUploader('load-stages-data', 'ステージリスト', d => Array.isArray(d) && d.every(i => i.value && i.name), data => { 
+        stageSelect.innerHTML = '';
+        data.forEach(stage => {
+            const option = document.createElement('option');
+            option.value = stage.value;
+            option.textContent = stage.name;
+            stageSelect.appendChild(option);
+        });
+    });
     setupDataUploader('load-weapons-data', 'ブキデータ', d => Array.isArray(d), data => { WEAPONS = data; renderWeaponList(); });
     setupDataUploader('load-tiers-data', 'ティア表', d => d.area && (d.area.tierS || d.area.tierX), data => { WEAPON_TIERS_BY_RULE = data; });
     setupDataUploader('load-counters-data', 'カウンター相性', d => Array.isArray(d) && d.every(i => i.winner), data => { COUNTER_MATCHUPS = data; });

@@ -17,6 +17,8 @@
             --secondary-hover-color: #c82333;
             --info-color: #007bff;
             --info-hover-color: #0056b3;
+            --warning-color: #ffc107;
+            --warning-hover-color: #e0a800;
             --slot-border-color: #ccc;
             --slot-selected-border-color: #4CAF50;
             --font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "ヒラギノ角ゴ ProN W3", Arial, "メイリオ", Meiryo, sans-serif;
@@ -227,6 +229,25 @@
         .data-upload-grid input[type="file"] {
             display: none;
         }
+        .data-settings-footer {
+            margin-top: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .data-settings-note {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
+        #clear-settings-button {
+            background-color: var(--warning-color);
+            color: black;
+            padding: 0.5rem 1rem;
+        }
+        #clear-settings-button:hover {
+            background-color: var(--warning-hover-color);
+        }
 
 
         /* --- 結果表示エリア --- */
@@ -329,7 +350,7 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 1rem;
-            min-width: 500px;
+            min-width: 600px; /* 列追加のため拡張 */
         }
         .targets-table th, .targets-table td {
             border: 1px solid var(--border-color);
@@ -358,17 +379,7 @@
     </header>
     <main>
         <div class="setup-area">
-            <select id="stage-select">
-                <option value="mategai">マテガイ放水路</option>
-                <option value="yagara">ヤガラ市場</option>
-                <option value="gonzui">ゴンズイ地区</option>
-                <option value="yunohana">ユノハナ大渓谷</option>
-                <option value="masaba">マサバ海峡大橋</option>
-                <option value="kinmedai">キンメダイ美術館</option>
-                <option value="ama">海女美術大学</option>
-                <option value="zatou">ザトウマーケット</option>
-                <option value="chouzame">チョウザメ造船</option>
-            </select>
+            <select id="stage-select"></select>
             <select id="rule-select">
                 <option value="nawabari">ナワバリバトル</option>
                 <option value="area">ガチエリア</option>
@@ -419,6 +430,12 @@
                 <input type="file" id="load-counters-data" accept=".json">
                 <label for="load-specials-data">スペシャルタグ上書き</label>
                 <input type="file" id="load-specials-data" accept=".json">
+                <label for="load-roles-data">役割データ上書き</label>
+                <input type="file" id="load-roles-data" accept=".json">
+            </div>
+            <div class="data-settings-footer">
+                <p class="data-settings-note">※アップロードしたデータはブラウザに保存され、次回以降も自動で読み込まれます。</p>
+                <button id="clear-settings-button">保存した設定をリセット</button>
             </div>
         </details>
 
@@ -442,75 +459,109 @@
 
 // =================================================================================
 // ★★★ 分析ロジックのコアデータ ★★★
-// これらの変数は、下のファイルアップロード機能によって上書きされる可能性があります。
 // =================================================================================
-let WEAPONS = [
+let DEFAULT_WEAPONS = [
     { "name": "わかばシューター", "type": "シューター", "range": 27, "sub": "スプラッシュボム", "special": "グレートバリア", "specialPoints": 200, "img": "https://placehold.co/96x96/90ee90/000000?text=WAKABA" },
     { "name": "スプラシューター", "type": "シューター", "range": 50, "sub": "キューバンボム", "special": "ウルトラショット", "specialPoints": 200, "img": "https://placehold.co/96x96/4682b4/ffffff?text=SPLAT_S" },
     { "name": "スプラローラー", "type": "ローラー", "range": 45, "sub": "カーリングボム", "special": "グレートバリア", "specialPoints": 190, "img": "https://placehold.co/96x96/66cdaa/000000?text=ROLLER" },
     { "name": "リッター4K", "type": "チャージャー", "range": 100, "sub": "ホップソナー", "special": "テイオウイカ", "specialPoints": 210, "img": "https://placehold.co/96x96/8b0000/ffffff?text=LITER" },
     { "name": "ハイドラント", "type": "スピナー", "range": 90, "sub": "ロボットボム", "special": "ナイスダマ", "specialPoints": 210, "img": "https://placehold.co/96x96/ffa500/000000?text=HYDRA" }
 ];
+let WEAPONS = [...DEFAULT_WEAPONS];
 
-let SPECIAL_TAGS = {
-    "グレートバリア": ["抑え"], "ホップソナー": ["抑え"], "カニタンク": ["打開", "キル", "抑え"],
-    "トリプルトルネード": ["打開", "抑え"], "サメライド": ["打開", "キル"], "ナイスダマ": ["打開", "キル"],
-    "ウルトラショット": ["打開", "キル"], "メガホンレーザー5.1ch": ["打開", "キル"], "エナジースタンド": ["抑え"],
-    "デコイチラシ": ["抑え"], "ウルトラハンコ": ["打開", "キル"], "キューインキ": ["抑え"],
-    "アメフラシ": ["打開", "抑え"], "マルチミサイル": ["打開", "抑え"], "ショクワンダー": ["打開", "キル"],
-    "テイオウイカ": ["打開", "キル"], "スミナガシート": ["抑え"], "ジェットパック": ["打開", "キル"],
-    "ウルトラチャクチ": ["打開", "キル"]
-};
+let DEFAULT_SPECIAL_TAGS = {"グレートバリア": ["抑え"],"ホップソナー": ["抑え"],"カニタンク": ["打開", "キル", "抑え"],"トリプルトルネード": ["打開", "抑え"],"サメライド": ["打開", "キル"],"ナイスダマ": ["打開", "キル"],"ウルトラショット": ["打開", "キル"],"メガホンレーザー5.1ch": ["打開", "キル"],"エナジースタンド": ["抑え"],"デコイチラシ": ["抑え"],"ウルトラハンコ": ["打開", "キル"],"キューインキ": ["抑え"],"アメフラシ": ["打開", "抑え"],"マルチミサイル": ["打開", "抑え"],"ショクワンダー": ["打開", "キル"],"テイオウイカ": ["打開", "キル"],"スミナガシート": ["抑え"],"ジェットパック": ["打開", "キル"],"ウルトラチャクチ": ["打開", "キル"]};
+let SPECIAL_TAGS = {...DEFAULT_SPECIAL_TAGS};
 
-let COUNTER_MATCHUPS = [
-    { "winner": "リッター", "loser": "ハイドラント", "score": 8, "description": "リッターはハイドラントに対して有利な射程を持っています。" },
-    { "winner": "エクスプロッシャー", "loser": "カニタンク", "score": 6, "description": "エクスプロッシャーはカニタンクに対して効果的にダメージを与えられます。" }
-];
+let DEFAULT_COUNTER_MATCHUPS = [{"winner": "リッター","loser": "ハイドラント","score": 8,"description": "リッターはハイドラントに対して有利な射程を持っています。"},{"winner": "エクスプロッシャー","loser": "カニタンク","score": 6,"description": "エクスプロッシャーはカニタンクに対して効果的にダメージを与えられます。"}];
+let COUNTER_MATCHUPS = [...DEFAULT_COUNTER_MATCHUPS];
 
-const TIER_SCORES = {
-    tierX: 15, tierS: 10, tierA: 7, tierB: 4, tierC: 1
-};
+const TIER_SCORES = {tierX: 15,tierS: 10,tierA: 7,tierB: 4,tierC: 1};
 
-let WEAPON_TIERS_BY_RULE = {
-    nawabari: {
-        "tierX": ["シャープマーカーネオ"],
-        "tierS": ["わかばシューター", "プロモデラーRG"],
-        "tierA": ["LACT-450", "スプラシューター"],
-        "tierB": ["スプラローラー", "ワイドローラー"],
-        "tierC": ["リッター4K"]
-    },
-    area: {
-        "tierX": ["リッター4K"],
-        "tierS": ["シャープマーカーネオ", "H3リールガンD"],
-        "tierA": ["スプラシューターコラボ", "エクスプロッシャー", "LACT-450"],
-        "tierB": ["わかばシューター", "バケットスロッシャー"],
-        "tierC": ["カーボンローラー"]
-    },
-    yagura: {
-        "tierX": [],
-        "tierS": ["ラピッドブラスター", "クーゲルシュライバー", "ジェットスイーパーカスタム"],
-        "tierA": ["リッター4K", "ホットブラスター", ".96ガロン"],
-        "tierB": ["スプラシューター", "キャンプシェルター"],
-        "tierC": ["パブロ"]
-    },
-    hoko: {
-        "tierX": [],
-        "tierS": ["スプラシューター", "H3リールガン", "エクスプロッシャーカスタム"],
-        "tierA": [".52ガロン", "ジムワイパー", "ワイドローラー"],
-        "tierB": ["N-ZAP85", "スプラローラー"],
-        "tierC": ["ソイチューバー"]
-    },
-    asari: {
-        "tierX": [],
-        "tierS": ["シャープマーカー", "スクリュースロッシャー", "N-ZAP85"],
-        "tierA": ["スプラマニューバー", "わかばシューター", "オーバーフロッシャー"],
-        "tierB": ["ボールドマーカー", "ホクサイ"],
-        "tierC": ["リッター4K"]
+let DEFAULT_WEAPON_TIERS_BY_RULE = {"nawabari": {"tierX": ["シャープマーカーネオ"],"tierS": ["わかばシューター", "プロモデラーRG"],"tierA": ["LACT-450", "スプラシューター"],"tierB": ["スプラローラー", "ワイドローラー"],"tierC": ["リッター4K"]},"area": {"tierX": ["リッター4K"],"tierS": ["シャープマーカーネオ", "H3リールガンD"],"tierA": ["スプラシューターコラボ", "エクスプロッシャー", "LACT-450"],"tierB": ["わかばシューター", "バケットスロッシャー"],"tierC": ["カーボンローラー"]},"yagura": {"tierX": [],"tierS": ["ラピッドブラスター", "クーゲルシュライバー", "ジェットスイーパーカスタム"],"tierA": ["リッター4K", "ホットブラスター", ".96ガロン"],"tierB": ["スプラシューター", "キャンプシェルター"],"tierC": ["パブロ"]},"hoko": {"tierX": [],"tierS": ["スプラシューター", "H3リールガン", "エクスプロッシャーカスタム"],"tierA": [".52ガロン", "ジムワイパー", "ワイドローラー"],"tierB": ["N-ZAP85", "スプラローラー"],"tierC": ["ソイチューバー"]},"asari": {"tierX": [],"tierS": ["シャープマーカー", "スクリュースロッシャー", "N-ZAP85"],"tierA": ["スプラマニューバー", "わかばシューター", "オーバーフロッシャー"],"tierB": ["ボールドマーカー", "ホクサイ"],"tierC": ["リッター4K"]}};
+let WEAPON_TIERS_BY_RULE = {...DEFAULT_WEAPON_TIERS_BY_RULE};
+
+let DEFAULT_STAGES = [{"value": "yagara","name": "ヤガラ市場"},{"value": "gonzui","name": "ゴンズイ地区"},{"value": "yunohana","name": "ユノハナ大渓谷"},{"value": "mategai","name": "マテガイ放水路"},{"value": "ama","name": "海女美術大学"},{"value": "chouzame","name": "チョウザメ造船"},{"value": "zatou","name": "ザトウマーケット"},{"value": "sumeshi","name": "スメーシーワールド"},{"value": "kusaya","name": "クサヤ温泉"},{"value": "hirame","name": "ヒラメが丘団地"},{"value": "nampula","name": "ナンプラー遺跡"},{"value": "kinmedai","name": "キンメダイ美術館"},{"value": "mahimahi","name": "マヒマヒリゾート＆スパ"},{"value": "masaba","name": "マサバ海峡大橋"},{"value": "taraport","name": "タラポートショッピングパーク"},{"value": "kombu","name": "コンブトラック"},{"value": "manta","name": "マンタマリア号"},{"value": "negitoro","name": "ネギトロ炭鉱"},{"value": "bangaitei","name": "バイガイ亭"},{"value": "takaashi","name": "タカアシ経済特区"},{"value": "ohyou","name": "オヒョウ海運"},{"value": "namero","name": "ナメロウ金属"},{"value": "kajibaguru","name": "カジキ空港"},{"value": "dekaline","name": "デカライン高架下"}];
+
+let DEFAULT_ROLE_PRIORITIES = [{"name": "わかばシューター","後衛アンカー": 27,"かく乱": 80,"塗り": 100,"前衛アタッカー": 72,"中衛サポート": 0, "中衛スイーパー": 67},{"name": "スプラシューター","後衛アンカー": 50,"かく乱": 34,"塗り": 0,"前衛アタッカー": 95,"中衛サポート": 0, "中衛スイーパー": 90},{"name": "スプラローラー","後衛アンカー": 45,"かく乱": 100,"塗り": 0,"前衛アタッカー": 90,"中衛サポート": 0, "中衛スイーパー": 85},{"name": "リッター4K","後衛アンカー": 100,"かく乱": 0,"塗り": 0,"前衛アタッカー": 55,"中衛サポート": 0, "中衛スイーパー": 60},{"name": "ハイドラント","後衛アンカー": 90,"かく乱": 0,"塗り": 0,"前衛アタッカー": 65,"中衛サポート": 0, "中衛スイーパー": 70}];
+let ROLE_PRIORITIES = [...DEFAULT_ROLE_PRIORITIES];
+
+// --- IndexedDB ---
+const DB_NAME = 'SplatoonAnalyzerDB';
+const STORE_NAME = 'spla3_team_settings'; // ストア名を変更
+let db;
+
+function initDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onerror = event => reject("DB Error: " + event.target.errorCode);
+        request.onsuccess = event => {
+            db = event.target.result;
+            resolve(db);
+        };
+        request.onupgradeneeded = event => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            }
+        };
+    });
+}
+
+function saveData(id, data) {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject("DB not initialized");
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.put({ id, data });
+        request.onsuccess = () => resolve();
+        request.onerror = event => reject("Save Error: " + event.target.errorCode);
+    });
+}
+
+function loadData(id) {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject("DB not initialized");
+        const transaction = db.transaction([STORE_NAME]);
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.get(id);
+        request.onsuccess = event => resolve(event.target.result ? event.target.result.data : null);
+        request.onerror = event => reject("Load Error: " + event.target.errorCode);
+    });
+}
+
+function clearDB() {
+    return new Promise((resolve, reject) => {
+        if (!db) return reject("DB not initialized");
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.clear();
+        request.onsuccess = () => resolve();
+        request.onerror = event => reject("Clear Error: " + event.target.errorCode);
+    });
+}
+
+// --- App Logic ---
+document.addEventListener('DOMContentLoaded', async () => {
+    // DB初期化とデータ読み込み
+    try {
+        await initDB();
+        const loadedWeapons = await loadData('weapons');
+        if (loadedWeapons) WEAPONS = loadedWeapons;
+        const loadedTiers = await loadData('tiers');
+        if (loadedTiers) WEAPON_TIERS_BY_RULE = loadedTiers;
+        const loadedCounters = await loadData('counters');
+        if (loadedCounters) COUNTER_MATCHUPS = loadedCounters;
+        const loadedSpecials = await loadData('specials');
+        if (loadedSpecials) SPECIAL_TAGS = loadedSpecials;
+        const loadedStages = await loadData('stages');
+        if (loadedStages) DEFAULT_STAGES = loadedStages;
+        const loadedRoles = await loadData('roles');
+        if (loadedRoles) ROLE_PRIORITIES = loadedRoles;
+
+    } catch (e) {
+        console.error("IndexedDBの初期化または読み込みに失敗しました。", e);
     }
-};
 
-
-document.addEventListener('DOMContentLoaded', () => {
     // DOM要素の取得
     const weaponSlots = document.querySelectorAll('.weapon-slot');
     const modal = document.getElementById('weapon-modal');
@@ -523,6 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadInput = document.getElementById('load-input');
     const analysisHistoryContainer = document.getElementById('analysis-history-container');
     const stageSelect = document.getElementById('stage-select');
+    const clearSettingsButton = document.getElementById('clear-settings-button');
     
     // データアップロード用Input
     const loadWeaponsDataInput = document.getElementById('load-weapons-data');
@@ -530,6 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadCountersDataInput = document.getElementById('load-counters-data');
     const loadSpecialsDataInput = document.getElementById('load-specials-data');
     const loadStagesDataInput = document.getElementById('load-stages-data');
+    const loadRolesDataInput = document.getElementById('load-roles-data');
     
     // アプリの状態を管理する変数
     let currentSlot = null;
@@ -538,6 +591,17 @@ document.addEventListener('DOMContentLoaded', () => {
         enemy: {1: null, 2: null, 3: null, 4: null} 
     };
     let analysisHistory = [];
+
+    // ステージリストの描画
+    function renderStageList(stages) {
+        stageSelect.innerHTML = '';
+        stages.forEach(stage => {
+            const option = document.createElement('option');
+            option.value = stage.value;
+            option.textContent = stage.name;
+            stageSelect.appendChild(option);
+        });
+    }
 
     /**
      * ブキリストをモーダル内に描画する関数
@@ -606,28 +670,101 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- 分析ロジック ---
+    const ROLE_ORDER = ["後衛アンカー", "かく乱", "塗り", "中衛スイーパー", "前衛アタッカー", "中衛サポート"];
+    const defaultPriorities = ROLE_ORDER.reduce((acc, role) => ({ ...acc, [role]: 0 }), {});
 
-    function assignRole(weapon) {
-        if (weapon.range >= 85 || weapon.name.includes("リッター") || weapon.name.includes("ハイドラ")) return "後衛アンカー";
-        if (weapon.name.includes("わかば") || weapon.name.includes("プロモデラー") || weapon.special === "アメフラシ") return "塗り/かく乱";
-        if (weapon.range <= 55 || weapon.type === "ローラー" || weapon.type === "フデ" || weapon.type === "マニューバー") return "前衛アタッカー";
-        return "中衛サポート";
+    function assignInherentRole(weapon) {
+        const priorities = ROLE_PRIORITIES.find(p => p.name === weapon.name) || {};
+        let maxPriority = -1;
+        let bestRole = "中衛サポート";
+        ROLE_ORDER.forEach(role => {
+             if (priorities[role] > maxPriority) {
+                maxPriority = priorities[role];
+                bestRole = role;
+            }
+        });
+        return bestRole;
+    }
+
+    function assignRolesByPriority(teamWeapons) {
+        let players = teamWeapons.map((weapon, index) => {
+            const priorities = ROLE_PRIORITIES.find(p => p.name === weapon.name) || { name: weapon.name, ...defaultPriorities };
+            return { weapon, priorities, originalIndex: index, choiceIndex: 0, finalRole: null };
+        });
+
+        let assignedRoles = new Set();
+        
+        for (let i = 0; i < players.length; i++) {
+            // 各プレイヤーの希望リストを作成
+            players.forEach(p => {
+                if (!p.finalRole) {
+                    p.wishlist = ROLE_ORDER
+                        .map(role => ({ role, score: p.priorities[role] || 0 }))
+                        .sort((a, b) => b.score - a.score);
+                }
+            });
+
+            // 役割の競合をチェック
+            let claims = {};
+            players.filter(p => !p.finalRole).forEach(p => {
+                const desiredRole = p.wishlist[p.choiceIndex].role;
+                if (!claims[desiredRole]) claims[desiredRole] = [];
+                claims[desiredRole].push(p);
+            });
+
+            // 競合解決
+            for (const role in claims) {
+                let candidates = claims[role];
+                if (candidates.length > 1) { // 競合が発生した場合
+                    candidates.sort((a, b) => {
+                        // 優先度が同じ場合は、次の役割の優先度でタイブレーク
+                        if (a.priorities[role] !== b.priorities[role]) {
+                            return b.priorities[role] - a.priorities[role];
+                        }
+                        const nextChoiceA = a.wishlist[a.choiceIndex + 1]?.score || -1;
+                        const nextChoiceB = b.wishlist[b.choiceIndex + 1]?.score || -1;
+                        return nextChoiceA - nextChoiceB; // 次の優先度が低い方が勝つ
+                    });
+                    
+                    const winner = candidates[0];
+                    winner.finalRole = role;
+                    assignedRoles.add(role);
+
+                    candidates.slice(1).forEach(p => p.choiceIndex++); // 負けた方は次の希望へ
+                }
+            }
+
+            // 競合しなかったプレイヤーを確定
+            for (const role in claims) {
+                if (claims[role].length === 1 && !assignedRoles.has(role)) {
+                    const winner = claims[role][0];
+                    winner.finalRole = role;
+                    assignedRoles.add(role);
+                }
+            }
+        }
+        
+        const finalRolesInOrder = new Array(4);
+        players.forEach(p => {
+            finalRolesInOrder[p.originalIndex] = p.finalRole;
+        });
+        return finalRolesInOrder;
     }
 
     function getRoleBalanceScore(roles) {
-        const counts = roles.reduce((acc, role) => { acc[role] = (acc[role] || 0) + 1; return acc; }, {});
+        const roleSet = new Set(roles);
         let score = 10;
-        if ((counts["後衛アンカー"] || 0) > 1) score -= 5;
-        if (!counts["前衛アタッカー"]) score -= 3;
-        if (!counts["塗り/かく乱"]) score -= 2;
+        if (!roleSet.has("後衛アンカー")) score -= 3;
+        if (!roleSet.has("前衛アタッカー") && !roleSet.has("かく乱")) score -= 5;
+        if (!roleSet.has("塗り")) score -= 2;
         return Math.max(0, score);
     }
 
     function getSynergyScore(teamWeapons) {
         let score = 0;
         const specials = teamWeapons.map(w => w.special);
-        if (specials.includes("エナジースタンド") && teamWeapons.some(w => assignRole(w) === "前衛アタッカー")) score += 5;
-        if (specials.includes("ホップソナー") && teamWeapons.some(w => assignRole(w) === "後衛アンカー")) score += 5;
+        if (specials.includes("エナジースタンド") && teamWeapons.some(w => assignInherentRole(w) === "前衛アタッカー" || assignInherentRole(w) === "かく乱")) score += 5;
+        if (specials.includes("ホップソナー") && teamWeapons.some(w => assignInherentRole(w) === "後衛アンカー")) score += 5;
         return score;
     }
 
@@ -682,7 +819,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tiers.tierS && tiers.tierS.includes(weaponName)) return "S";
         if (tiers.tierA && tiers.tierA.includes(weaponName)) return "A";
         if (tiers.tierB && tiers.tierB.includes(weaponName)) return "B";
-        return "C"; // デフォルトでCティア
+        return "C";
     }
     
     function getTierScore(teamWeapons, rule) {
@@ -702,31 +839,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function calculateTargets(weapon, role) {
         let targets = { kill: 10, death: 8, paint: 1000, sp: 6 };
-        switch(role) {
-            case "前衛アタッカー":
-                targets.kill *= 1.2;
-                targets.death *= 1.1;
-                targets.paint *= 0.8;
-                break;
-            case "中衛サポート":
-                break;
-            case "後衛アンカー":
-                targets.kill *= 1.3;
-                targets.death *= 0.7;
-                targets.paint *= 0.7;
-                targets.sp *= 0.9;
-                break;
-            case "塗り/かく乱":
-                targets.kill *= 0.7;
-                targets.paint *= 1.4;
-                targets.sp *= 1.2;
-                break;
-        }
+        const roleMap = {
+            "前衛アタッカー": { kill: 1.2, death: 1.1, paint: 0.8, sp: 1.0 },
+            "中衛サポート": { kill: 1.0, death: 1.0, paint: 1.0, sp: 1.0 },
+            "後衛アンカー": { kill: 1.3, death: 0.7, paint: 0.7, sp: 0.9 },
+            "塗り": { kill: 0.7, death: 1.0, paint: 1.5, sp: 1.2 },
+            "かく乱": { kill: 1.1, death: 1.2, paint: 0.9, sp: 1.1 },
+            "中衛スイーパー": { kill: 1.1, death: 0.9, paint: 1.1, sp: 1.0 },
+        };
+        const multipliers = roleMap[role] || roleMap["中衛サポート"];
         return {
-            kill: Math.round(targets.kill),
-            death: Math.round(targets.death),
-            paint: Math.round(targets.paint),
-            sp: Math.round(targets.sp)
+            kill: Math.round(targets.kill * multipliers.kill),
+            death: Math.round(targets.death * multipliers.death),
+            paint: Math.round(targets.paint * multipliers.paint),
+            sp: Math.round(targets.sp * multipliers.sp)
         };
     }
 
@@ -744,20 +870,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const analyzeTeam = (teamWeapons, currentRule) => {
             const avgRange = teamWeapons.reduce((sum, w) => sum + w.range, 0) / 4;
-            const roles = teamWeapons.map(weapon => assignRole(weapon));
+            const inherentRoles = teamWeapons.map(weapon => assignInherentRole(weapon));
+            const compRoles = assignRolesByPriority(teamWeapons);
             const paintScore = teamWeapons.reduce((score, w) => {
                 if (w.name.includes("わかば") || w.name.includes("プロモデラー")) return score + 3;
                 if (w.type === "シューター" || w.type === "ローラー" || w.type === "フデ") return score + 2;
                 return score + 1;
             }, 0);
-            const balanceScore = getRoleBalanceScore(roles);
+            const balanceScore = getRoleBalanceScore(compRoles);
             const synergyScore = getSynergyScore(teamWeapons);
             const specialComp = getSpecialCompositionScore(teamWeapons);
             const tierScore = getTierScore(teamWeapons, currentRule);
             
             const totalScore = (avgRange * 0.4) + (paintScore * 2) + (balanceScore * 1.5) + synergyScore + specialComp.score + tierScore;
             const weaponTiers = teamWeapons.map(w => getWeaponTier(w.name, currentRule));
-            return { totalScore, avgRange, paintScore, balanceScore, synergyScore, specialComp, tierScore, roles, weapons: teamWeapons, weaponTiers };
+            return { totalScore, avgRange, paintScore, balanceScore, synergyScore, specialComp, tierScore, inherentRoles, compRoles, weapons: teamWeapons, weaponTiers };
         };
 
         const myTeamAnalysis = analyzeTeam(myTeamWeapons, rule);
@@ -822,17 +949,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     <li><b>マッチアップ評価:</b> <ul>${matchupScores.descriptions.length > 0 ? matchupScores.descriptions.map(d => `<li>${d}</li>`).join('') : '<li>特筆すべき有利・不利なし</li>'}</ul></li>
                 </ul>`;
             
-            let strategy = `自チームは${myTeamAnalysis.roles.join('、')}という構成です。役割バランスを意識し、特に${myTeamAnalysis.balanceScore < 7 ? '不足している役割を全員でカバーする動きが' : 'それぞれの役割をしっかりこなすことが'}勝利への鍵です。`;
+            let strategy = `この構成では、自チームは${myTeamAnalysis.compRoles.join('、')}という役割分担が最適です。役割バランスを意識し、特に${myTeamAnalysis.balanceScore < 7 ? '不足している役割を全員でカバーする動きが' : 'それぞれの役割をしっかりこなすことが'}勝利への鍵です。`;
             if (matchupScores.descriptions.length > 0) {
                 strategy += ' マッチアップの有利不利を活かした立ち回りを心がけましょう。';
             }
             
             let targetsTable = `<div class="targets-container"><table class="targets-table">
-                <thead><tr><th>ブキ</th><th>役割</th><th>キル</th><th>デス</th><th>塗りP</th><th>SP回数</th></tr></thead><tbody>`;
+                <thead><tr><th>ブキ</th><th>本来の役割</th><th>構成での役割</th><th>キル</th><th>デス</th><th>塗りP</th><th>SP回数</th></tr></thead><tbody>`;
             myTeamAnalysis.weapons.forEach((weapon, i) => {
-                const role = myTeamAnalysis.roles[i];
-                const targets = calculateTargets(weapon, role);
-                targetsTable += `<tr><td>${weapon.name}</td><td>${role}</td><td>${targets.kill}</td><td>${targets.death}</td><td>${targets.paint}</td><td>${targets.sp}</td></tr>`;
+                const inherentRole = myTeamAnalysis.inherentRoles[i];
+                const compRole = myTeamAnalysis.compRoles[i];
+                const targets = calculateTargets(weapon, compRole);
+                targetsTable += `<tr><td>${weapon.name}</td><td>${inherentRole}</td><td>${compRole}</td><td>${targets.kill}</td><td>${targets.death}</td><td>${targets.paint}</td><td>${targets.sp}</td></tr>`;
             });
             targetsTable += `</tbody></table></div>`;
 
@@ -964,19 +1092,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    setupDataUploader('load-stages-data', 'ステージリスト', d => Array.isArray(d) && d.every(i => i.value && i.name), data => { 
-        stageSelect.innerHTML = '';
-        data.forEach(stage => {
-            const option = document.createElement('option');
-            option.value = stage.value;
-            option.textContent = stage.name;
-            stageSelect.appendChild(option);
-        });
+    setupDataUploader('load-stages-data', 'ステージリスト', d => Array.isArray(d) && d.every(i => i.value && i.name), async data => { 
+        await saveData('stages', data);
+        DEFAULT_STAGES = data;
+        renderStageList(data); 
     });
-    setupDataUploader('load-weapons-data', 'ブキデータ', d => Array.isArray(d), data => { WEAPONS = data; renderWeaponList(); });
-    setupDataUploader('load-tiers-data', 'ティア表', d => d.area && (d.area.tierS || d.area.tierX), data => { WEAPON_TIERS_BY_RULE = data; });
-    setupDataUploader('load-counters-data', 'カウンター相性', d => Array.isArray(d) && d.every(i => i.winner), data => { COUNTER_MATCHUPS = data; });
-    setupDataUploader('load-specials-data', 'スペシャルタグ', d => typeof d === 'object', data => { SPECIAL_TAGS = data; });
+    setupDataUploader('load-weapons-data', 'ブキデータ', d => Array.isArray(d), async data => { WEAPONS = data; await saveData('weapons', data); renderWeaponList(); });
+    setupDataUploader('load-tiers-data', 'ティア表', d => d.area && (d.area.tierS || d.area.tierX), async data => { WEAPON_TIERS_BY_RULE = data; await saveData('tiers', data); });
+    setupDataUploader('load-counters-data', 'カウンター相性', d => Array.isArray(d) && d.every(i => i.winner), async data => { COUNTER_MATCHUPS = data; await saveData('counters', data); });
+    setupDataUploader('load-specials-data', 'スペシャルタグ', d => typeof d === 'object', async data => { SPECIAL_TAGS = data; await saveData('specials', data); });
+    setupDataUploader('load-roles-data', '役割データ', d => Array.isArray(d) && d.every(i => i.name), async data => { ROLE_PRIORITIES = data; await saveData('roles', data); });
+    
+    clearSettingsButton.addEventListener('click', async () => {
+        if(confirm('ブラウザに保存されたすべてのカスタムデータを削除し、初期設定に戻します。よろしいですか？')) {
+            await clearDB();
+            alert('設定をリセットしました。ページをリロードします。');
+            location.reload();
+        }
+    });
 
     resetButton.addEventListener('click', () => {
         weaponSlots.forEach(slot => {
@@ -999,7 +1132,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('rule-select').selectedIndex = 0;
     });
 
-    // 初期状態でブキリストを描画
+    // 初期化
+    renderStageList(DEFAULT_STAGES);
     renderWeaponList();
 });
 </script>

@@ -359,6 +359,10 @@
         }
         .targets-table th { background-color: #f8f9fa; }
         .targets-table td:first-child { text-align: left; font-weight: bold; }
+        .targets-table tfoot td {
+            font-weight: bold;
+            background-color: #f8f9fa;
+        }
 
         /* --- ブキ選択モーダル --- */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(5px); }
@@ -487,12 +491,12 @@ let ROLE_PRIORITIES = [...DEFAULT_ROLE_PRIORITIES];
 
 // --- IndexedDB ---
 const DB_NAME = 'SplatoonAnalyzerDB';
-const STORE_NAME = 'spla3_team_settings'; // ストア名を変更
+const STORE_NAME = 'spla3_team_settings'; 
 let db;
 
 function initDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
+        const request = indexedDB.open(DB_NAME, 2); 
         request.onerror = event => reject("DB Error: " + event.target.errorCode);
         request.onsuccess = event => {
             db = event.target.result;
@@ -678,81 +682,83 @@ document.addEventListener('DOMContentLoaded', async () => {
         let maxPriority = -1;
         let bestRole = "中衛サポート";
         ROLE_ORDER.forEach(role => {
-             if (priorities[role] > maxPriority) {
-                maxPriority = priorities[role];
+             const currentPriority = priorities[role] || 0;
+             if (currentPriority > maxPriority) {
+                maxPriority = currentPriority;
                 bestRole = role;
             }
         });
-        return bestRole;
+        return { role: bestRole, score: maxPriority };
     }
 
     function assignRolesByPriority(teamWeapons) {
-        let players = teamWeapons.map((weapon, index) => {
-            const priorities = ROLE_PRIORITIES.find(p => p.name === weapon.name) || { name: weapon.name, ...defaultPriorities };
-            return { weapon, priorities, originalIndex: index, choiceIndex: 0, finalRole: null };
-        });
-
-        let assignedRoles = new Set();
-        
-        for (let i = 0; i < players.length; i++) {
-            // 各プレイヤーの希望リストを作成
-            players.forEach(p => {
-                if (!p.finalRole) {
-                    p.wishlist = ROLE_ORDER
-                        .map(role => ({ role, score: p.priorities[role] || 0 }))
-                        .sort((a, b) => b.score - a.score);
+        const players = teamWeapons.map((weapon, index) => ({
+            weapon,
+            priorities: ROLE_PRIORITIES.find(p => p.name === weapon.name) || { ...defaultPriorities },
+            originalIndex: index,
+        }));
+    
+        function getPermutations(arr) {
+            if (arr.length === 0) return [[]];
+            const firstEl = arr[0];
+            const rest = arr.slice(1);
+            const permsWithoutFirst = getPermutations(rest);
+            const allPermutations = [];
+            permsWithoutFirst.forEach(p => {
+                for (let i = 0; i <= p.length; i++) {
+                    const perm = [...p.slice(0, i), firstEl, ...p.slice(i)];
+                    allPermutations.push(perm);
                 }
             });
-
-            // 役割の競合をチェック
-            let claims = {};
-            players.filter(p => !p.finalRole).forEach(p => {
-                const desiredRole = p.wishlist[p.choiceIndex].role;
-                if (!claims[desiredRole]) claims[desiredRole] = [];
-                claims[desiredRole].push(p);
-            });
-
-            // 競合解決
-            for (const role in claims) {
-                let candidates = claims[role];
-                if (candidates.length > 1) { // 競合が発生した場合
-                    candidates.sort((a, b) => {
-                        // 優先度が同じ場合は、次の役割の優先度でタイブレーク
-                        if (a.priorities[role] !== b.priorities[role]) {
-                            return b.priorities[role] - a.priorities[role];
-                        }
-                        const nextChoiceA = a.wishlist[a.choiceIndex + 1]?.score || -1;
-                        const nextChoiceB = b.wishlist[b.choiceIndex + 1]?.score || -1;
-                        return nextChoiceA - nextChoiceB; // 次の優先度が低い方が勝つ
-                    });
-                    
-                    const winner = candidates[0];
-                    winner.finalRole = role;
-                    assignedRoles.add(role);
-
-                    candidates.slice(1).forEach(p => p.choiceIndex++); // 負けた方は次の希望へ
-                }
-            }
-
-            // 競合しなかったプレイヤーを確定
-            for (const role in claims) {
-                if (claims[role].length === 1 && !assignedRoles.has(role)) {
-                    const winner = claims[role][0];
-                    winner.finalRole = role;
-                    assignedRoles.add(role);
-                }
-            }
+            return allPermutations;
         }
+
+        const playerIndices = [0, 1, 2, 3];
+        const roleIndices = [0, 1, 2, 3, 4, 5];
         
-        const finalRolesInOrder = new Array(4);
-        players.forEach(p => {
-            finalRolesInOrder[p.originalIndex] = p.finalRole;
+        let bestAssignment = new Array(4).fill({ role: '未定', score: 0 });
+        let maxScore = -1;
+        
+        const roleCombinations = getPermutations(roleIndices).map(p => p.slice(0, 4));
+
+        roleCombinations.forEach(roleCombinationIndices => {
+            const roles = roleCombinationIndices.map(i => ROLE_ORDER[i]);
+            const playerPermutations = getPermutations(playerIndices);
+
+            playerPermutations.forEach(playerOrder => {
+                let currentScore = 0;
+                let currentAssignment = new Array(4);
+                let isValid = true;
+                
+                playerOrder.forEach((playerIndex, i) => {
+                    const role = roles[i];
+                    if (!role) {
+                        isValid = false;
+                        return;
+                    }
+                    const score = players[playerIndex].priorities[role] || 0;
+                    currentScore += score;
+                    currentAssignment[playerIndex] = { role, score };
+                });
+                
+                if (isValid && currentScore > maxScore) {
+                    maxScore = currentScore;
+                    bestAssignment = currentAssignment;
+                }
+            });
         });
-        return finalRolesInOrder;
+
+        const finalAssignment = new Array(4);
+        players.forEach((p, i) => {
+             finalAssignment[p.originalIndex] = bestAssignment[i];
+        });
+
+        return finalAssignment;
     }
 
+
     function getRoleBalanceScore(roles) {
-        const roleSet = new Set(roles);
+        const roleSet = new Set(roles.map(r => r.role));
         let score = 10;
         if (!roleSet.has("後衛アンカー")) score -= 3;
         if (!roleSet.has("前衛アタッカー") && !roleSet.has("かく乱")) score -= 5;
@@ -763,8 +769,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     function getSynergyScore(teamWeapons) {
         let score = 0;
         const specials = teamWeapons.map(w => w.special);
-        if (specials.includes("エナジースタンド") && teamWeapons.some(w => assignInherentRole(w) === "前衛アタッカー" || assignInherentRole(w) === "かく乱")) score += 5;
-        if (specials.includes("ホップソナー") && teamWeapons.some(w => assignInherentRole(w) === "後衛アンカー")) score += 5;
+        if (specials.includes("エナジースタンド") && teamWeapons.some(w => assignInherentRole(w).role === "前衛アタッカー" || assignInherentRole(w).role === "かく乱")) score += 5;
+        if (specials.includes("ホップソナー") && teamWeapons.some(w => assignInherentRole(w).role === "後衛アンカー")) score += 5;
         return score;
     }
 
@@ -872,19 +878,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const avgRange = teamWeapons.reduce((sum, w) => sum + w.range, 0) / 4;
             const inherentRoles = teamWeapons.map(weapon => assignInherentRole(weapon));
             const compRoles = assignRolesByPriority(teamWeapons);
+            const compRoleTotalScore = compRoles.reduce((sum, roleInfo) => sum + (roleInfo.score || 0), 0);
             const paintScore = teamWeapons.reduce((score, w) => {
                 if (w.name.includes("わかば") || w.name.includes("プロモデラー")) return score + 3;
                 if (w.type === "シューター" || w.type === "ローラー" || w.type === "フデ") return score + 2;
                 return score + 1;
             }, 0);
-            const balanceScore = getRoleBalanceScore(compRoles);
+            const balanceScore = getRoleBalanceScore(compRoles.map(r => r.role));
             const synergyScore = getSynergyScore(teamWeapons);
             const specialComp = getSpecialCompositionScore(teamWeapons);
             const tierScore = getTierScore(teamWeapons, currentRule);
             
             const totalScore = (avgRange * 0.4) + (paintScore * 2) + (balanceScore * 1.5) + synergyScore + specialComp.score + tierScore;
             const weaponTiers = teamWeapons.map(w => getWeaponTier(w.name, currentRule));
-            return { totalScore, avgRange, paintScore, balanceScore, synergyScore, specialComp, tierScore, inherentRoles, compRoles, weapons: teamWeapons, weaponTiers };
+            return { totalScore, avgRange, paintScore, balanceScore, synergyScore, specialComp, tierScore, inherentRoles, compRoles, compRoleTotalScore, weapons: teamWeapons, weaponTiers };
         };
 
         const myTeamAnalysis = analyzeTeam(myTeamWeapons, rule);
@@ -949,20 +956,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <li><b>マッチアップ評価:</b> <ul>${matchupScores.descriptions.length > 0 ? matchupScores.descriptions.map(d => `<li>${d}</li>`).join('') : '<li>特筆すべき有利・不利なし</li>'}</ul></li>
                 </ul>`;
             
-            let strategy = `この構成では、自チームは${myTeamAnalysis.compRoles.join('、')}という役割分担が最適です。役割バランスを意識し、特に${myTeamAnalysis.balanceScore < 7 ? '不足している役割を全員でカバーする動きが' : 'それぞれの役割をしっかりこなすことが'}勝利への鍵です。`;
+            let strategy = `この構成では、自チームは${myTeamAnalysis.compRoles.map(r => r.role).join('、')}という役割分担が最適です。役割バランスを意識し、特に${myTeamAnalysis.balanceScore < 7 ? '不足している役割を全員でカバーする動きが' : 'それぞれの役割をしっかりこなすことが'}勝利への鍵です。`;
             if (matchupScores.descriptions.length > 0) {
                 strategy += ' マッチアップの有利不利を活かした立ち回りを心がけましょう。';
             }
             
             let targetsTable = `<div class="targets-container"><table class="targets-table">
-                <thead><tr><th>ブキ</th><th>本来の役割</th><th>構成での役割</th><th>キル</th><th>デス</th><th>塗りP</th><th>SP回数</th></tr></thead><tbody>`;
+                <thead><tr><th>ブキ</th><th>本来の役割 (適正Pt)</th><th>構成での役割 (適正Pt)</th><th>キル</th><th>デス</th><th>塗りP</th><th>SP回数</th></tr></thead><tbody>`;
             myTeamAnalysis.weapons.forEach((weapon, i) => {
-                const inherentRole = myTeamAnalysis.inherentRoles[i];
-                const compRole = myTeamAnalysis.compRoles[i];
-                const targets = calculateTargets(weapon, compRole);
-                targetsTable += `<tr><td>${weapon.name}</td><td>${inherentRole}</td><td>${compRole}</td><td>${targets.kill}</td><td>${targets.death}</td><td>${targets.paint}</td><td>${targets.sp}</td></tr>`;
+                const inherentRoleInfo = myTeamAnalysis.inherentRoles[i];
+                const compRoleInfo = myTeamAnalysis.compRoles[i];
+                const targets = calculateTargets(weapon, compRoleInfo.role);
+                targetsTable += `<tr><td>${weapon.name}</td><td>${inherentRoleInfo.role} (${inherentRoleInfo.score})</td><td>${compRoleInfo.role} (${compRoleInfo.score})</td><td>${targets.kill}</td><td>${targets.death}</td><td>${targets.paint}</td><td>${targets.sp}</td></tr>`;
             });
-            targetsTable += `</tbody></table></div>`;
+            targetsTable += `</tbody><tfoot>
+                <tr><td colspan="2"><b>本来の役割 合計適正ポイント</b></td><td colspan="5"><b>${myTeamAnalysis.inherentRoles.reduce((s,r) => s + r.score, 0)}</b></td></tr>
+                <tr><td colspan="2"><b>構成での役割 合計適正ポイント</b></td><td colspan="5"><b>${myTeamAnalysis.compRoleTotalScore}</b></td></tr>
+            </tfoot></table></div>`;
 
             let compHTML = `<div class="result-compositions">
                 <div class="result-team-comp"><b>自チーム:</b> ${myTeamWeapons.map(w => `<div class="result-weapon"><img src="${w.img}" alt="${w.name}"><span>${w.name}</span></div>`).join('')}</div>

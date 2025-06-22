@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ブキJSONデータエディタ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans JP', 'Inter', sans-serif;
+        }
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        .table-responsive {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">ブキJSONデータエディタ</h1>
+            <p class="text-gray-600 dark:text-gray-400">JSONファイルをアップロードし、データの閲覧、フィルタリング、編集、追加、削除を行えます。</p>
+        </header>
+
+        <!-- コントロールパネル -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">ファイル操作</h2>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <div class="flex-1">
+                        <label for="file-upload" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">JSONファイルをアップロード</label>
+                        <input id="file-upload" type="file" accept=".json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 transition">
+                    </div>
+                    <div class="flex-shrink-0 self-end">
+                        <button id="download-btn" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition shadow">
+                            JSONダウンロード
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">データ操作</h2>
+                 <button id="add-new-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition shadow">
+                    新しいアイテムを追加
+                </button>
+            </div>
+        </div>
+
+        <!-- フィルター -->
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">フィルター</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="filter-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Type</label>
+                    <select id="filter-type" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="">すべて</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-sub" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sub</label>
+                    <select id="filter-sub" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="">すべて</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="filter-special" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Special</label>
+                    <select id="filter-special" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                        <option value="">すべて</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- データテーブル -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+             <div class="p-4 border-b dark:border-gray-700">
+                <p id="item-count" class="text-sm text-gray-600 dark:text-gray-400">0 件のアイテム</p>
+            </div>
+            <div class="table-responsive">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Range</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Sub</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Special</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">SP Points</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Image</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-table-body" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <!-- データはここに挿入されます -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編集/追加モーダル -->
+    <div id="modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden opacity-0" style="transform: scale(0.95);">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl transform overflow-hidden">
+            <form id="modal-form">
+                <div class="p-6">
+                    <h3 id="modal-title" class="text-2xl font-bold mb-6 text-gray-900 dark:text-white">アイテムを編集</h3>
+                    <input type="hidden" id="edit-id">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="name-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+                            <input type="text" id="name-input" required class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                        </div>
+                        <div>
+                           <label for="type-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Type</label>
+                            <input type="text" id="type-input" list="type-datalist" required class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                            <datalist id="type-datalist"></datalist>
+                        </div>
+                        <div>
+                            <label for="range-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Range</label>
+                            <input type="number" id="range-input" required class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                        </div>
+                        <div>
+                            <label for="sub-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sub</label>
+                            <input type="text" id="sub-input" list="sub-datalist" required class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                             <datalist id="sub-datalist"></datalist>
+                        </div>
+                         <div>
+                            <label for="special-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Special</label>
+                            <input type="text" id="special-input" list="special-datalist" required class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                            <datalist id="special-datalist"></datalist>
+                        </div>
+                        <div>
+                            <label for="sp-points-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Special Points</label>
+                            <input type="number" id="sp-points-input" required class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                        </div>
+                         <div class="md:col-span-2">
+                            <label for="img-input" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Image URL</label>
+                            <input type="url" id="img-input" class="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-900 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="submit" id="modal-save-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+                        保存
+                    </button>
+                    <button type="button" id="modal-cancel-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm">
+                        キャンセル
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // 初期データ (ユーザー提供のJSON)
+        const initialJsonData = `
+[
+  { "name": "わかばシューター", "type": "シューター", "range": 27, "sub": "スプラッシュボム", "special": "グレートバリア", "specialPoints": 200, "img": "https://placehold.co/96x96/90ee90/000000?text=WAKABA" },
+  { "name": "もみじシューター", "type": "シューター", "range": 27, "sub": "トーピード", "special": "ホップソナー", "specialPoints": 190, "img": "https://placehold.co/96x96/f08080/000000?text=MOMIJI" },
+  { "name": "シャープマーカー", "type": "シューター", "range": 37, "sub": "クイックボム", "special": "カニタンク", "specialPoints": 200, "img": "https://placehold.co/96x96/add8e6/000000?text=SHARP" },
+  { "name": "シャープマーカーネオ", "type": "シューター", "range": 37, "sub": "キューバンボム", "special": "トリプルトルネード", "specialPoints": 200, "img": "https://placehold.co/96x96/add8e6/000000?text=SHARP_N" },
+  { "name": "プロモデラーMG", "type": "シューター", "range": 27, "sub": "タンサンボム", "special": "サメライド", "specialPoints": 180, "img": "https://placehold.co/96x96/ffd700/000000?text=PMG" }
+]
+        `;
+
+        // アプリケーションの状態
+        let dataStore = [];
+        let uniqueValues = { type: [], sub: [], special: [] };
+
+        // DOM要素の取得
+        const fileUpload = document.getElementById('file-upload');
+        const downloadBtn = document.getElementById('download-btn');
+        const addNewBtn = document.getElementById('add-new-btn');
+        const tableBody = document.getElementById('data-table-body');
+        const filterType = document.getElementById('filter-type');
+        const filterSub = document.getElementById('filter-sub');
+        const filterSpecial = document.getElementById('filter-special');
+        const itemCountEl = document.getElementById('item-count');
+        
+        // モーダル関連のDOM要素
+        const modal = document.getElementById('modal');
+        const modalForm = document.getElementById('modal-form');
+        const modalTitle = document.getElementById('modal-title');
+        const modalSaveBtn = document.getElementById('modal-save-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const editIdInput = document.getElementById('edit-id');
+
+        // モーダル内の入力フィールド
+        const nameInput = document.getElementById('name-input');
+        const typeInput = document.getElementById('type-input');
+        const rangeInput = document.getElementById('range-input');
+        const subInput = document.getElementById('sub-input');
+        const specialInput = document.getElementById('special-input');
+        const spPointsInput = document.getElementById('sp-points-input');
+        const imgInput = document.getElementById('img-input');
+
+        // データリスト
+        const typeDatalist = document.getElementById('type-datalist');
+        const subDatalist = document.getElementById('sub-datalist');
+        const specialDatalist = document.getElementById('special-datalist');
+
+        /**
+         * データをロードし、UIを初期化する
+         * @param {string} jsonString - JSON形式の文字列
+         */
+        const loadData = (jsonString) => {
+            try {
+                let parsedData = JSON.parse(jsonString);
+                // 各アイテムに一意のIDを付与（編集・削除のため）
+                dataStore = parsedData.map(item => ({...item, _id: crypto.randomUUID() }));
+                extractUniqueValues();
+                populateDropdowns();
+                applyFilters();
+            } catch (error) {
+                console.error("JSONの解析に失敗しました:", error);
+                alert("無効なJSONファイルです。");
+            }
+        };
+
+        /**
+         * データからユニークな値（type, sub, special）を抽出する
+         */
+        const extractUniqueValues = () => {
+            const types = new Set();
+            const subs = new Set();
+            const specials = new Set();
+            dataStore.forEach(item => {
+                if (item.type) types.add(item.type);
+                if (item.sub) subs.add(item.sub);
+                if (item.special) specials.add(item.special);
+            });
+            uniqueValues.type = [...types].sort();
+            uniqueValues.sub = [...subs].sort();
+            uniqueValues.special = [...specials].sort();
+        };
+
+        /**
+         * フィルターとデータリストのドロップダウンを生成する
+         */
+        const populateDropdowns = () => {
+            const populate = (selectEl, values) => {
+                selectEl.innerHTML = '<option value="">すべて</option>'; // フィルター用
+                values.forEach(value => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = value;
+                    selectEl.appendChild(option);
+                });
+            };
+            const populateDatalist = (datalistEl, values) => {
+                datalistEl.innerHTML = '';
+                values.forEach(value => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    datalistEl.appendChild(option);
+                });
+            };
+            populate(filterType, uniqueValues.type);
+            populate(filterSub, uniqueValues.sub);
+            populate(filterSpecial, uniqueValues.special);
+            populateDatalist(typeDatalist, uniqueValues.type);
+            populateDatalist(subDatalist, uniqueValues.sub);
+            populateDatalist(specialDatalist, uniqueValues.special);
+        };
+        
+        /**
+         * テーブルを描画する
+         * @param {Array} data - 表示するデータ
+         */
+        const renderTable = (data) => {
+            tableBody.innerHTML = '';
+            itemCountEl.textContent = `${data.length} / ${dataStore.length} 件のアイテム`;
+
+            if (data.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="8" class="text-center py-10 text-gray-500">該当するアイテムがありません。</td></tr>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${item.name || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${item.type || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${item.range || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${item.sub || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${item.special || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">${item.specialPoints || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                        ${item.img ? `<img src="${item.img}" alt="${item.name}" class="w-10 h-10 rounded-md object-cover" onerror="this.style.display='none'">` : ''}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="edit-btn text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3">編集</button>
+                        <button class="delete-btn text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300">削除</button>
+                    </td>
+                `;
+                tr.querySelector('.edit-btn').addEventListener('click', () => openModal(item));
+                tr.querySelector('.delete-btn').addEventListener('click', () => deleteItem(item._id));
+                tableBody.appendChild(tr);
+            });
+        };
+        
+        /**
+         * フィルターを適用してテーブルを再描画する
+         */
+        const applyFilters = () => {
+            const type = filterType.value;
+            const sub = filterSub.value;
+            const special = filterSpecial.value;
+
+            const filteredData = dataStore.filter(item => {
+                return (type ? item.type === type : true) &&
+                       (sub ? item.sub === sub : true) &&
+                       (special ? item.special === special : true);
+            });
+            renderTable(filteredData);
+        };
+        
+        /**
+         * アイテムを削除する
+         * @param {string} id - 削除するアイテムのID
+         */
+        const deleteItem = (id) => {
+            if (confirm('このアイテムを本当に削除しますか？')) {
+                dataStore = dataStore.filter(item => item._id !== id);
+                applyFilters();
+            }
+        };
+        
+        /**
+         * 編集/追加モーダルを開く
+         * @param {Object|null} item - 編集するアイテム。新規追加の場合はnull
+         */
+        const openModal = (item = null) => {
+            modalForm.reset();
+            if (item) {
+                modalTitle.textContent = 'アイテムを編集';
+                editIdInput.value = item._id;
+                nameInput.value = item.name || '';
+                typeInput.value = item.type || '';
+                rangeInput.value = item.range || '';
+                subInput.value = item.sub || '';
+                specialInput.value = item.special || '';
+                spPointsInput.value = item.specialPoints || '';
+                imgInput.value = item.img || '';
+            } else {
+                modalTitle.textContent = '新しいアイテムを追加';
+                editIdInput.value = '';
+            }
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.style.transform = 'scale(1)';
+            }, 10);
+        };
+
+        /**
+         * モーダルを閉じる
+         */
+        const closeModal = () => {
+             modal.classList.add('opacity-0');
+             modal.style.transform = 'scale(0.95)';
+             setTimeout(() => modal.classList.add('hidden'), 300);
+        };
+
+        /**
+         * ファイルアップロードのハンドラー
+         */
+        const handleFileUpload = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    loadData(e.target.result);
+                };
+                reader.readAsText(file);
+            }
+        };
+
+        /**
+         * モーダルの保存処理
+         */
+        const handleFormSubmit = (event) => {
+            event.preventDefault();
+            const id = editIdInput.value;
+            const newItemData = {
+                name: nameInput.value,
+                type: typeInput.value,
+                range: Number(rangeInput.value),
+                sub: subInput.value,
+                special: specialInput.value,
+                specialPoints: Number(spPointsInput.value),
+                img: imgInput.value,
+            };
+
+            if (id) { // 編集の場合
+                const index = dataStore.findIndex(item => item._id === id);
+                if (index !== -1) {
+                    dataStore[index] = { ...dataStore[index], ...newItemData };
+                }
+            } else { // 追加の場合
+                dataStore.push({ ...newItemData, _id: crypto.randomUUID() });
+            }
+            
+            extractUniqueValues();
+            populateDropdowns();
+            applyFilters();
+            closeModal();
+        };
+
+        /**
+         * JSONデータをダウンロードする
+         */
+        const handleDownload = () => {
+            // _idプロパティを除いたデータをダウンロード
+            const dataToDownload = dataStore.map(({ _id, ...rest }) => rest);
+            const dataStr = JSON.stringify(dataToDownload, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ブキ_edited.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        // イベントリスナーの設定
+        fileUpload.addEventListener('change', handleFileUpload);
+        downloadBtn.addEventListener('click', handleDownload);
+        addNewBtn.addEventListener('click', () => openModal());
+        filterType.addEventListener('change', applyFilters);
+        filterSub.addEventListener('change', applyFilters);
+        filterSpecial.addEventListener('change', applyFilters);
+        modalForm.addEventListener('submit', handleFormSubmit);
+        modalCancelBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+
+        // 初期データの読み込み
+        loadData(initialJsonData);
+    </script>
+</body>
+</html>

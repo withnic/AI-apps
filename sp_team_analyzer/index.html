@@ -481,7 +481,7 @@ let COUNTER_MATCHUPS = [...DEFAULT_COUNTER_MATCHUPS];
 
 const TIER_SCORES = {tierX: 15,tierS: 10,tierA: 7,tierB: 4,tierC: 1};
 
-let DEFAULT_WEAPON_TIERS_BY_RULE = {"nawabari": {"tierX": ["シャープマーカーネオ"],"tierS": ["わかばシューター", "プロモデラーRG"],"tierA": ["LACT-450", "スプラシューター"],"tierB": ["スプラローラー", "ワイドローラー"],"tierC": ["リッター4K"]},"area": {"tierX": ["リッター4K"],"tierS": ["シャープマーカーネオ", "H3リールガンD"],"tierA": ["スプラシューターコラボ", "エクスプロッシャー", "LACT-450"],"tierB": ["わかばシューター", "バケットスロッシャー"],"tierC": ["カーボンローラー"]},"yagura": {"tierX": [],"tierS": ["ラピッドブラスター", "クーゲルシュライバー", "ジェットスイーパーカスタム"],"tierA": ["リッター4K", "ホットブラスター", ".96ガロン"],"tierB": ["スプラシューター", "キャンプシェルター"],"tierC": ["パブロ"]},"hoko": {"tierX": [],"tierS": ["スプラシューター", "H3リールガン", "エクスプロッシャーカスタム"],"tierA": [".52ガロン", "ジムワイパー", "ワイドローラー"],"tierB": ["N-ZAP85", "スプラローラー"],"tierC": ["ソイチューバー"]},"asari": {"tierX": [],"tierS": ["シャープマーカー", "スクリュースロッシャー", "N-ZAP85"],"tierA": ["スプラマニューバー", "わかばシューター", "オーバーフロッシャー"],"tierB": ["ボールドマーカー", "ホクサイ"],"tierC": ["リッター4K"]}};
+let DEFAULT_WEAPON_TIERS_BY_RULE = {"nawabari": {"tierX": ["シャープマーカーネオ"],"tierS": ["わかばシューター", "プロモデラーRG"],"tierA": ["LACT-450", "スプラシューター"],"tierB": ["スプラローラー", "ワイドローラー"],"tierC": ["リッター4K"]},"area": {"tierX": ["リッター4K"],"tierS": ["シャープマーカーネオ", "H3リールガンD"],"tierA": ["スプラシューターコラボ", "エクスプロッシャー", "LACT-450"],"tierB": ["わかばシューター", "バケットスロッシャー"],"tierC": ["カーボンローラー"]},"yagura": {"tierX": [],"tierS": ["ラピッドブラスター", "クーゲルシュライバー", "ジェットスイーパーカスタム"],"tierA": ["リッター4K", "ホットブラスター", ".96ガロン"],"tierB": ["スプラシューター", "キャンプシェルター"],"tierC": ["パブロ"]},"hoko": {"tierX": [],"tierS": ["スプラシューター", "H3リールガン", "エクスプロッシャーカスタム"],"tierA": [".52ガロン", "ジムワイパー", "ワイドローラー"],"tierB": ["N-ZAP85", "スプラローラー"],"tierC": ["ソイチューバー"]},"asari": {"tierX": [],"tierS": ["シャープマーカー", "スクリュースロッシャー", "N-ZAP85"],"tierA": ["スプラマニューバー", "わかばシューター", "オーバーフロッシャー"],"tierB": ["ボールドマーカー", "ホクサイ"],"tierC": ["リッター4K"]}, "subete": { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": []}};
 let WEAPON_TIERS_BY_RULE = {...DEFAULT_WEAPON_TIERS_BY_RULE};
 
 let DEFAULT_STAGES = [{"value": "yagara","name": "ヤガラ市場"},{"value": "gonzui","name": "ゴンズイ地区"},{"value": "yunohana","name": "ユノハナ大渓谷"},{"value": "mategai","name": "マテガイ放水路"},{"value": "ama","name": "海女美術大学"},{"value": "chouzame","name": "チョウザメ造船"},{"value": "zatou","name": "ザトウマーケット"},{"value": "sumeshi","name": "スメーシーワールド"},{"value": "kusaya","name": "クサヤ温泉"},{"value": "hirame","name": "ヒラメが丘団地"},{"value": "nampula","name": "ナンプラー遺跡"},{"value": "kinmedai","name": "キンメダイ美術館"},{"value": "mahimahi","name": "マヒマヒリゾート＆スパ"},{"value": "masaba","name": "マサバ海峡大橋"},{"value": "taraport","name": "タラポートショッピングパーク"},{"value": "kombu","name": "コンブトラック"},{"value": "manta","name": "マンタマリア号"},{"value": "negitoro","name": "ネギトロ炭鉱"},{"value": "bangaitei","name": "バイガイ亭"},{"value": "takaashi","name": "タカアシ経済特区"},{"value": "ohyou","name": "オヒョウ海運"},{"value": "namero","name": "ナメロウ金属"},{"value": "kajibaguru","name": "カジキ空港"},{"value": "dekaline","name": "デカライン高架下"}];
@@ -713,35 +713,44 @@ document.addEventListener('DOMContentLoaded', async () => {
             return allPermutations;
         }
 
+        function getCombinations(arr, k) {
+            const result = [];
+            function combine(startIndex, combo) {
+                if (combo.length === k) {
+                    result.push([...combo]);
+                    return;
+                }
+                for (let i = startIndex; i < arr.length; i++) {
+                    combo.push(arr[i]);
+                    combine(i + 1, combo);
+                    combo.pop();
+                }
+            }
+            combine(0, []);
+            return result;
+        }
+
+        const roleCombinations = getCombinations(ROLE_ORDER, 4);
         const playerIndices = [0, 1, 2, 3];
-        const roleIndices = [0, 1, 2, 3, 4, 5];
         
         let bestAssignment = new Array(4).fill({ role: '未定', score: 0 });
         let maxScore = -1;
-        
-        const roleCombinations = getPermutations(roleIndices).map(p => p.slice(0, 4));
 
-        roleCombinations.forEach(roleCombinationIndices => {
-            const roles = roleCombinationIndices.map(i => ROLE_ORDER[i]);
+        roleCombinations.forEach(roles => {
             const playerPermutations = getPermutations(playerIndices);
-
             playerPermutations.forEach(playerOrder => {
                 let currentScore = 0;
                 let currentAssignment = new Array(4);
-                let isValid = true;
                 
                 playerOrder.forEach((playerIndex, i) => {
                     const role = roles[i];
-                    if (!role) {
-                        isValid = false;
-                        return;
-                    }
+                    if (!role) return;
                     const score = players[playerIndex].priorities[role] || 0;
                     currentScore += score;
                     currentAssignment[playerIndex] = { role, score };
                 });
-                
-                if (isValid && currentScore > maxScore) {
+
+                if (currentScore > maxScore) {
                     maxScore = currentScore;
                     bestAssignment = currentAssignment;
                 }
@@ -819,12 +828,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function getWeaponTier(weaponName, rule) {
-        const tiers = WEAPON_TIERS_BY_RULE[rule];
-        if (!tiers) return "C";
-        if (tiers.tierX && tiers.tierX.includes(weaponName)) return "X";
-        if (tiers.tierS && tiers.tierS.includes(weaponName)) return "S";
-        if (tiers.tierA && tiers.tierA.includes(weaponName)) return "A";
-        if (tiers.tierB && tiers.tierB.includes(weaponName)) return "B";
+        const ruleTiers = WEAPON_TIERS_BY_RULE[rule] || {};
+        for (const tier of ['tierX', 'tierS', 'tierA', 'tierB', 'tierC']) {
+            if (ruleTiers[tier] && ruleTiers[tier].includes(weaponName)) return tier.replace('tier', '');
+        }
+        
+        const subeteTiers = WEAPON_TIERS_BY_RULE['subete'] || {};
+        for (const tier of ['tierX', 'tierS', 'tierA', 'tierB', 'tierC']) {
+            if (subeteTiers[tier] && subeteTiers[tier].includes(weaponName)) return tier.replace('tier', '');
+        }
+
         return "C";
     }
     

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スプラトゥーン ティア表エディタ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        .tier-row {
+            display: grid;
+            grid-template-columns: 100px 1fr;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .tier-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            border-radius: 0.5rem;
+            height: 100%;
+        }
+        .weapon-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            min-height: 112px; /* アイテムの高さ + padding */
+            border: 2px dashed #4a5568;
+            border-radius: 0.5rem;
+            background-color: #2d3748;
+            transition: background-color 0.2s;
+        }
+        .weapon-list.drag-over {
+            background-color: #4a5568;
+            border-color: #a0aec0;
+        }
+        .weapon-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            width: 80px;
+            padding: 4px;
+            background-color: #4a5568;
+            border: 1px solid #718096;
+            border-radius: 0.5rem;
+            cursor: grab;
+            transition: transform 0.2s;
+            text-align: center;
+        }
+        .weapon-item:active {
+            cursor: grabbing;
+        }
+        .weapon-item.dragging {
+            opacity: 0.5;
+        }
+        .weapon-item img {
+            width: 64px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 0.25rem;
+        }
+        .weapon-item span {
+            font-size: 12px;
+            color: white;
+            margin-top: 4px;
+            display: block;
+            word-break: break-all;
+        }
+        .tier-X { background-color: #ef4444; }
+        .tier-S { background-color: #f97316; }
+        .tier-A { background-color: #eab308; }
+        .tier-B { background-color: #22c55e; }
+        .tier-C { background-color: #3b82f6; }
+        .pool-label { background-color: #6b7280; }
+
+        /* --- グローバルツールチップ用のCSS --- */
+        #global-tooltip {
+            visibility: hidden;
+            position: fixed; /* 画面に固定 */
+            width: 160px;
+            background-color: #111827;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px;
+            z-index: 9999; /* 最前面に表示 */
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 13px;
+            line-height: 1.4;
+            pointer-events: none; /* ツールチップ自身がマウスイベントを妨げないように */
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            border: 1px solid #374151;
+        }
+
+        #global-tooltip.visible {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white p-4 lg:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-6">
+            <h1 class="text-3xl font-bold text-center mb-2">スプラトゥーン ティア表エディタ</h1>
+            <p class="text-center text-gray-400">ブキをドラッグ＆ドロップしてティアを編集してください。</p>
+        </header>
+
+        <div class="flex flex-col md:flex-row gap-6 mb-6">
+            <!-- コントロールパネル -->
+            <div class="w-full md:w-1/3 lg:w-1/4 bg-gray-800 p-4 rounded-lg shadow-lg space-y-4">
+                <h2 class="text-xl font-semibold mb-2">コントロール</h2>
+                <div>
+                    <label for="rule-selector" class="block mb-2 text-sm font-medium text-gray-300">ゲームルール選択:</label>
+                    <select id="rule-selector" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"></select>
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-300">ティア表をアップロード</label>
+                    <input type="file" id="upload-tier-list" accept=".json" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-300">ブキリスト (ブキ.json)</label>
+                    <input type="file" id="upload-buki" accept=".json" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700">
+                </div>
+                <div>
+                    <label class="block mb-2 text-sm font-medium text-gray-300">編集したティア表</label>
+                    <button id="download-tiers" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">ダウンロード</button>
+                </div>
+            </div>
+
+            <!-- ティア表エディタ -->
+            <div id="tier-editor" class="w-full md:w-2/3 lg:w-3/4 bg-gray-800 p-4 rounded-lg shadow-lg"></div>
+        </div>
+
+        <!-- 未配置のブキリスト -->
+        <div class="bg-gray-800 p-4 rounded-lg shadow-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">未配置のブキ</h2>
+                <div class="w-1/2">
+                    <input type="text" id="search-buki" placeholder="ブキ名で検索..." class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                </div>
+            </div>
+            <div id="unranked-pool" class="weapon-list p-4 bg-gray-900 rounded-lg min-h-[120px] max-h-[360px] overflow-y-auto"></div>
+        </div>
+
+    </div>
+
+    <script>
+    // --- 初期データ ---
+    let initialTierData = {
+      "subete": { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": [] },
+      "nawabari": { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": [] },
+      "area": { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": [] },
+      "yagura": { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": [] },
+      "hoko": { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": [] },
+      "asari": { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": [] }
+    };
+
+    let initialBukiData = [
+      { "name": "わかばシューター", "type": "シューター", "range": 27, "sub": "スプラッシュボム", "special": "グレートバリア", "specialPoints": 200, "img": "https://placehold.co/96x96/90ee90/000000?text=WAKABA" },
+      { "name": "もみじシューター", "type": "シューター", "range": 27, "sub": "トーピード", "special": "ホップソナー", "specialPoints": 190, "img": "https://placehold.co/96x96/f08080/000000?text=MOMIJI" },
+      { "name": "シャープマーカー", "type": "シューター", "range": 37, "sub": "クイックボム", "special": "カニタンク", "specialPoints": 200, "img": "https://placehold.co/96x96/add8e6/000000?text=SHARP" },
+      { "name": "シャープマーカーネオ", "type": "シューター", "range": 37, "sub": "キューバンボム", "special": "トリプルトルネード", "specialPoints": 200, "img": "https://placehold.co/96x96/add8e6/000000?text=SHARP_N" },
+      ];
+
+    // --- グローバル変数 ---
+    let tierData = JSON.parse(JSON.stringify(initialTierData));
+    let bukiDataMap = new Map();
+    let currentRule = 'subete';
+    const tierOrder = ["tierX", "tierS", "tierA", "tierB", "tierC"];
+    const tierLabels = { tierX: 'X', tierS: 'S', tierA: 'A', tierB: 'B', tierC: 'C' };
+    const tierColors = { tierX: 'tier-X', tierS: 'tier-S', tierA: 'tier-A', tierB: 'tier-B', tierC: 'tier-C' };
+
+    // --- DOM要素 ---
+    const ruleSelector = document.getElementById('rule-selector');
+    const tierEditor = document.getElementById('tier-editor');
+    const unrankedPool = document.getElementById('unranked-pool');
+    const downloadBtn = document.getElementById('download-tiers');
+    const uploadBukiInput = document.getElementById('upload-buki');
+    const uploadTierListInput = document.getElementById('upload-tier-list');
+    const searchInput = document.getElementById('search-buki');
+    let globalTooltip = null;
+
+    // --- ドラッグ＆ドロップ関連の変数 ---
+    let draggedItem = null;
+    let sourceContainerId = null;
+
+    // --- 関数 ---
+
+    function setupBukiMap(bukiArray) {
+        bukiDataMap.clear();
+        bukiArray.forEach(buki => bukiDataMap.set(buki.name, buki));
+    }
+
+    function createBukiElement(bukiName) {
+        const buki = bukiDataMap.get(bukiName);
+        if (!buki) return null;
+
+        const item = document.createElement('div');
+        item.className = 'weapon-item';
+        item.draggable = true;
+        item.dataset.bukiName = bukiName;
+        
+        const img = document.createElement('img');
+        img.src = buki.img;
+        img.alt = buki.name;
+        img.onerror = () => { img.src = `https://placehold.co/64x64/333/fff?text=NO_IMG`; };
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = buki.name;
+
+        item.appendChild(img);
+        item.appendChild(nameSpan);
+
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+
+        return item;
+    }
+    
+    function renderRule(ruleName) {
+        tierEditor.innerHTML = '';
+        const ruleTiers = tierData[ruleName] || {};
+        tierOrder.forEach(tierId => {
+            const row = document.createElement('div');
+            row.className = 'tier-row';
+            const label = document.createElement('div');
+            label.className = `tier-label ${tierColors[tierId]}`;
+            label.textContent = tierLabels[tierId];
+            const list = document.createElement('div');
+            list.className = 'weapon-list';
+            list.id = `${ruleName}-${tierId}`;
+            addDropHandlers(list);
+            const bukiInTier = ruleTiers[tierId] || [];
+            bukiInTier.forEach(bukiName => {
+                const bukiElement = createBukiElement(bukiName);
+                if (bukiElement) list.appendChild(bukiElement);
+            });
+            row.appendChild(label);
+            row.appendChild(list);
+            tierEditor.appendChild(row);
+        });
+        renderUnrankedPool(ruleName);
+    }
+    
+    function renderUnrankedPool(ruleName) {
+        unrankedPool.innerHTML = '';
+        const rankedBuki = new Set();
+        if (tierData[ruleName]) {
+            Object.values(tierData[ruleName]).forEach(tier => tier.forEach(buki => rankedBuki.add(buki)));
+        }
+        const searchTerm = searchInput.value.toLowerCase();
+        for (const bukiName of bukiDataMap.keys()) {
+            const isRanked = rankedBuki.has(bukiName);
+            const matchesSearch = bukiName.toLowerCase().includes(searchTerm);
+            if (!isRanked && matchesSearch) {
+                const bukiElement = createBukiElement(bukiName);
+                if(bukiElement) unrankedPool.appendChild(bukiElement);
+            }
+        }
+    }
+
+    function addDropHandlers(container) {
+        container.addEventListener('dragover', handleDragOver);
+        container.addEventListener('dragenter', handleDragEnter);
+        container.addEventListener('dragleave', handleDragLeave);
+        container.addEventListener('drop', handleDrop);
+    }
+    
+    function handleDragStart(e) {
+        draggedItem = this;
+        sourceContainerId = this.parentElement.id;
+        setTimeout(() => this.classList.add('dragging'), 0);
+    }
+
+    function handleDragEnd() {
+        this.classList.remove('dragging');
+        draggedItem = null;
+        sourceContainerId = null;
+    }
+
+    function handleDragOver(e) {
+        e.preventDefault();
+    }
+
+    function handleDragEnter(e) {
+        e.preventDefault();
+        if(this.classList.contains('weapon-list')) this.classList.add('drag-over');
+    }
+
+    function handleDragLeave() {
+        if(this.classList.contains('weapon-list')) this.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+        e.preventDefault();
+        if (!draggedItem) return;
+        const targetContainer = this.closest('.weapon-list');
+        if (!targetContainer) return;
+        targetContainer.classList.remove('drag-over');
+        const bukiName = draggedItem.dataset.bukiName;
+        const targetId = targetContainer.id;
+        if (sourceContainerId && sourceContainerId !== 'unranked-pool') {
+            const [rule, tier] = sourceContainerId.split('-');
+            if(tierData[rule] && tierData[rule][tier]) {
+                tierData[rule][tier] = tierData[rule][tier].filter(b => b !== bukiName);
+            }
+        }
+        if (targetId !== 'unranked-pool') {
+            const [rule, tier] = targetId.split('-');
+            if(tierData[rule] && tierData[rule][tier] && !tierData[rule][tier].includes(bukiName)) {
+                tierData[rule][tier].push(bukiName);
+            }
+        }
+        renderRule(currentRule);
+    }
+
+    function handleShowTooltip(e) {
+        const item = e.target.closest('.weapon-item');
+        if (!item) return;
+
+        const bukiName = item.dataset.bukiName;
+        const buki = bukiDataMap.get(bukiName);
+        if (!buki) return;
+
+        globalTooltip.innerHTML = `
+            <div class="font-bold">サブ:</div><div>${buki.sub || 'N/A'}</div>
+            <div class="font-bold mt-1">スペシャル:</div><div>${buki.special || 'N/A'}</div>
+        `;
+        
+        const itemRect = item.getBoundingClientRect();
+        const tooltipWidth = 160;
+        const tooltipHeight = globalTooltip.offsetHeight;
+        const buffer = 10;
+
+        let top = itemRect.top - tooltipHeight - buffer;
+        if (top < 0) {
+            top = itemRect.bottom + buffer;
+        }
+
+        let left = itemRect.left + (itemRect.width / 2) - (tooltipWidth / 2);
+        if (left < 0) {
+            left = buffer;
+        } else if (left + tooltipWidth > window.innerWidth) {
+            left = window.innerWidth - tooltipWidth - buffer;
+        }
+
+        globalTooltip.style.top = `${top}px`;
+        globalTooltip.style.left = `${left}px`;
+        globalTooltip.classList.add('visible');
+    }
+
+    function handleHideTooltip(e) {
+        const item = e.target.closest('.weapon-item');
+        if (item) {
+             globalTooltip.classList.remove('visible');
+        }
+    }
+    
+    function initialize() {
+        globalTooltip = document.createElement('div');
+        globalTooltip.id = 'global-tooltip';
+        document.body.appendChild(globalTooltip);
+
+        setupBukiMap(initialBukiData);
+
+        ruleSelector.innerHTML = '';
+        Object.keys(tierData).forEach(rule => {
+            const option = document.createElement('option');
+            option.value = rule;
+            option.textContent = rule === 'subete' ? 'すべて' : rule.charAt(0).toUpperCase() + rule.slice(1);
+            ruleSelector.appendChild(option);
+        });
+        ruleSelector.value = currentRule;
+
+        ruleSelector.addEventListener('change', (e) => {
+            currentRule = e.target.value;
+            renderRule(currentRule);
+        });
+        
+        searchInput.addEventListener('input', () => renderUnrankedPool(currentRule));
+
+        downloadBtn.addEventListener('click', () => {
+            const dataStr = JSON.stringify(tierData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ティア表_edited.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+        
+        uploadBukiInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                let modal;
+                try {
+                    const newBukiData = JSON.parse(event.target.result);
+                    if (!Array.isArray(newBukiData)) throw new Error("JSONが配列ではありません。");
+                    setupBukiMap(newBukiData);
+                    renderRule(currentRule);
+                    modal = createModal("ブキリストが正常に更新されました。", "success");
+                } catch (err) {
+                    console.error("ブキ.json の読み込みに失敗しました:", err);
+                    modal = createModal("ブキ.json の読み込みに失敗しました。<br>ファイル形式を確認してください。", "error");
+                }
+                document.body.appendChild(modal);
+                uploadBukiInput.value = ''; // 同じファイルを再度選択できるように値をリセット
+            };
+            reader.readAsText(file);
+        });
+
+        uploadTierListInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                let modal;
+                try {
+                    const newTierData = JSON.parse(event.target.result);
+                    // 簡単なバリデーション
+                    if (!newTierData.subete || !Array.isArray(newTierData.subete.tierX)) {
+                         throw new Error("ティア表の形式が正しくありません。");
+                    }
+                    tierData = newTierData;
+                    // 足りないルールがあれば空のデータで補完する
+                    const allRules = ['subete', 'nawabari', 'area', 'yagura', 'hoko', 'asari'];
+                    allRules.forEach(rule => {
+                        if (!tierData[rule]) {
+                            tierData[rule] = { "tierX": [], "tierS": [], "tierA": [], "tierB": [], "tierC": [] };
+                        }
+                    });
+
+                    renderRule(currentRule);
+                    modal = createModal("ティア表が正常に読み込まれました。", "success");
+                } catch (err) {
+                    console.error("ティア表の読み込みに失敗しました:", err);
+                    modal = createModal("ティア表の読み込みに失敗しました。<br>ファイル形式を確認してください。", "error");
+                }
+                document.body.appendChild(modal);
+                uploadTierListInput.value = ''; // 同じファイルを再度選択できるように値をリセット
+            };
+            reader.readAsText(file);
+        });
+
+        document.addEventListener('mouseover', handleShowTooltip);
+        document.addEventListener('mouseout', handleHideTooltip);
+        
+        addDropHandlers(unrankedPool);
+        renderRule(currentRule);
+    }
+    
+    function createModal(message, type = 'success') {
+        const modal = document.createElement('div');
+        const bgColor = type === 'success' ? 'bg-gray-800' : 'bg-red-800';
+        const btnColor = type === 'success' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700';
+        modal.className = `fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50`;
+        modal.innerHTML = `
+            <div class="${bgColor} rounded-lg p-8 shadow-2xl text-center">
+                <p class="text-lg mb-4">${message}</p>
+                <button onclick="this.parentElement.parentElement.remove()" class="${btnColor} text-white font-bold py-2 px-6 rounded-lg">OK</button>
+            </div>
+        `;
+        return modal;
+    }
+
+    window.onload = initialize;
+    </script>
+</body>
+</html>
